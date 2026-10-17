@@ -1,0 +1,16 @@
+# Datos descargados (se regeneran con los colectores)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Entorno
+.env
+.env.local
+.venv/
+__pycache__/
+node_modules/
+
+# IDE
+.idea/
+.DS_Store

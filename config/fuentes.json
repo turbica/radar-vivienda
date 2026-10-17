@@ -1,0 +1,19 @@
+{
+    "gva_viviendas_turisticas_csv": "https://dadesobertes.gva.es/dataset/758f8f8e-c5af-4622-b268-a6c591710a51/resource/b1bdc28e-9813-422a-ab7a-63c21290493d/download/lista-de-viviendas-turisticas.csv",
+    "gva_viviendas_turisticas_dataset_id": "tur-gestur-vt",
+    "gva_ckan_api": "http://www.dadesobertes.gva.es/api/3/action",
+    "valencia_ckan_portal": "https://opendata.vlci.valencia.es/",
+    "datasets_municipales_femp80": [
+        "Nº 11 - Avisos (comunicaciones de incidencias en la vía pública)",
+        "Nº 12 - Ayudas sociales (otorgadas a personas y organizaciones)",
+        "Nº 20 - Censo de empresas y agentes económicos",
+        "Nº 40 - Facturas municipales"
+    ],
+    "oficina_estadistica_valencia": {
+        "web": "https://www.valencia.es/cas/estadistica-quienes-somos",
+        "email_solicitudes": "infoestadistica@valencia.es"
+    },
+    "gva_viviendas_turisticas_ficha": "https://dadesobertes.gva.es/es/dataset/tur-gestur-vt/resource/b1bdc28e-9813-422a-ab7a-63c21290493d",
+    "valencia_estadistica_sede": "https://sede.valencia.es/sede/registro/procedimiento/AE.OT.10?lang=1",
+    "guia_femp_80_datasets_pdf": "https://redtransparenciayparticipacion.es/wp-content/uploads/2025/03/Datos-abiertos-80-conjuntos-de-datos.pdf"
+}
