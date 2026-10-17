@@ -1,0 +1,22 @@
+name: Política de archivos de IA
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  comprobar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rechazar archivos de IA y agentes de código
+        run: |
+          patrones='^CLAUDE\.md$|^CLAUDE\.local\.md$|^\.claude/|^\.mcp\.json$|^AGENTS\.md$|^AGENT\.md$|^\.agents/|^\.agent/|^skills\-lock\.json$|^GEMINI\.md$|^\.gemini/|^\.codex/|^\.cursor/|^\.cursorrules$|^\.cursorignore$|^\.cursorindexingignore$|^\.github/copilot\-instructions\.md$|^\.github/instructions/|^\.github/prompts/|^\.github/chatmodes/|^\.github/agents/|^\.windsurf/|^\.windsurfrules$|^\.codeium/|^\.clinerules$|^\.clinerules/|^\.cline/|^\.roo/|^\.roomodes$|^\.kilocode/|^\.aider|^CONVENTIONS\.md$|^\.continue/|^\.junie/|^\.amazonq/|^\.tabnine/|^\.zed/|^\.rules$|^\.opencode/|^opencode\.json$|^\.goose/|^\.augment/|^\.specstory/'
+          encontrados=$(git ls-files | grep -E "$patrones" || true)
+          if [ -n "$encontrados" ]; then
+            echo "::error::Este repositorio no admite archivos de IA ni de agentes de código (ver README):"
+            echo "$encontrados"
+            exit 1
+          fi
+          echo "Sin archivos de IA versionados."
