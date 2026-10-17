@@ -24,3 +24,7 @@ doc/                  Informe de origen y documentación
 - Oficina de Estadística municipal: infoestadistica@valencia.es / estadistica@valencia.es
 - Fundación Las Naves: datoseguro@lasnaves.com
 - API CKAN (documentación): http://docs.ckan.org/en/latest/api/index.html
+
+## Licencia
+
+Código bajo [GNU AGPL-3.0](LICENSE). Los datos de origen mantienen la licencia de cada organismo publicador (consultar la ficha de cada dataset).
