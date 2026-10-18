@@ -3,13 +3,18 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+web/public/data/
 
-# Entorno
+# Entorno y compilación
 .env
 .env.local
 .venv/
 __pycache__/
 node_modules/
+.pnpm-store/
+dist/
+.astro/
+*.tsbuildinfo
 
 # IDE
 .idea/

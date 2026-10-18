@@ -1,0 +1,30 @@
+services:
+  collector:
+    build:
+      context: .
+      target: collector
+    container_name: radar-vivienda-collector
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DATA_DIR=/app/data
+      - STORAGE_DRIVER=${STORAGE_DRIVER:-local}
+      - COLLECTOR_INTERVAL_SECONDS=${COLLECTOR_INTERVAL_SECONDS:-604800}
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config:ro
+
+  web:
+    build:
+      context: .
+      target: web
+    container_name: radar-vivienda-web
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - ./data/processed:/app/data/processed:ro
+    depends_on:
+      - collector

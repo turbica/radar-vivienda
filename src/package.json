@@ -1,0 +1,27 @@
+{
+  "name": "@radar-vivienda/collector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "collect": "node --experimental-strip-types ./index.ts collect",
+    "process": "node --experimental-strip-types ./index.ts process",
+    "data:sync": "node --experimental-strip-types ./sync-releases.ts",
+    "start:daemon": "node --experimental-strip-types ./index.ts daemon",
+    "test": "node --experimental-strip-types --test ./test/*.test.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "^1.2.1-alpha.17",
+    "@google-cloud/storage": "^7.15.2",
+    "@turbica/valencia-open-data-core": "github:turbica/valencia-open-data-core#main",
+    "@turf/turf": "^7.2.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.2"
+  }
+}

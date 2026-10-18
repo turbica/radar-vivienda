@@ -1,19 +1,71 @@
 {
-    "gva_viviendas_turisticas_csv": "https://dadesobertes.gva.es/dataset/758f8f8e-c5af-4622-b268-a6c591710a51/resource/b1bdc28e-9813-422a-ab7a-63c21290493d/download/lista-de-viviendas-turisticas.csv",
-    "gva_viviendas_turisticas_dataset_id": "tur-gestur-vt",
-    "gva_ckan_api": "http://www.dadesobertes.gva.es/api/3/action",
-    "valencia_ckan_portal": "https://opendata.vlci.valencia.es/",
-    "datasets_municipales_femp80": [
-        "Nº 11 - Avisos (comunicaciones de incidencias en la vía pública)",
-        "Nº 12 - Ayudas sociales (otorgadas a personas y organizaciones)",
-        "Nº 20 - Censo de empresas y agentes económicos",
-        "Nº 40 - Facturas municipales"
-    ],
-    "oficina_estadistica_valencia": {
-        "web": "https://www.valencia.es/cas/estadistica-quienes-somos",
-        "email_solicitudes": "infoestadistica@valencia.es"
+  "gva_viviendas_turisticas_csv": "https://dadesobertes.gva.es/dataset/758f8f8e-c5af-4622-b268-a6c591710a51/resource/b1bdc28e-9813-422a-ab7a-63c21290493d/download/lista-de-viviendas-turisticas.csv",
+  "gva_viviendas_turisticas_dataset_id": "tur-gestur-vt",
+  "gva_ckan_api": "https://dadesobertes.gva.es/api/3/action",
+  "valencia_ckan_portal": "https://opendata.vlci.valencia.es/",
+  "valencia_ckan_api": "https://opendata.vlci.valencia.es/api/3/action",
+  "datasets_municipales_femp80": [
+    "Nº 11 - Avisos (comunicaciones de incidencias en la vía pública)",
+    "Nº 12 - Ayudas sociales (otorgadas a personas y organizaciones)",
+    "Nº 20 - Censo de empresas y agentes económicos",
+    "Nº 40 - Facturas municipales"
+  ],
+  "valencia_datasets": {
+    "barrios": {
+      "package_id": "barris-barrios",
+      "geojson_url": "https://geoportal.valencia.es/server/rest/services/OPENDATA/UrbanismoEInfraestructuras/MapServer/224/query?where=1=1&outFields=*&f=geojson",
+      "pbf_url": "https://geoportal.valencia.es/server/rest/services/OPENDATA/UrbanismoEInfraestructuras/MapServer/224/query?where=1=1&outFields=*&f=pbf"
     },
-    "gva_viviendas_turisticas_ficha": "https://dadesobertes.gva.es/es/dataset/tur-gestur-vt/resource/b1bdc28e-9813-422a-ab7a-63c21290493d",
-    "valencia_estadistica_sede": "https://sede.valencia.es/sede/registro/procedimiento/AE.OT.10?lang=1",
-    "guia_femp_80_datasets_pdf": "https://redtransparenciayparticipacion.es/wp-content/uploads/2025/03/Datos-abiertos-80-conjuntos-de-datos.pdf"
+    "distritos": {
+      "package_id": "districtes-distritos",
+      "geojson_url": "https://geoportal.valencia.es/server/rest/services/OPENDATA/UrbanismoEInfraestructuras/MapServer/225/query?where=1=1&outFields=*&f=geojson"
+    },
+    "vulnerabilidad_barrios": {
+      "package_id": "vulnerabilidad-por-barrios",
+      "geojson_url": "https://opendata.vlci.valencia.es/dataset/ca18278b-d040-4274-b9c7-c1a9daae54b9/resource/fd2ca0dc-5344-4aad-8934-2077a0bb120d/download/vulnerabilidad-por-barrios.geojson",
+      "csv_url": "https://opendata.vlci.valencia.es/dataset/ca18278b-d040-4274-b9c7-c1a9daae54b9/resource/6648d1d5-4d35-410d-8260-432069045334/download/vulnerabilidad-por-barrios.csv"
+    },
+    "femp11_avisos_quejas": {
+      "femp_code": "Nº 11",
+      "femp_title": "Avisos (comunicaciones de incidencias en la vía pública)",
+      "package_id": "total-castellano",
+      "csv_url": "https://opendata.vlci.valencia.es/dataset/fb56e963-19bf-4818-94c6-7f626f7383fa/resource/b57d263a-867f-44c5-aeb9-3a1b301a368b/download/quejas-sugerencias_portal.csv"
+    },
+    "femp12_ayudas_subvenciones": {
+      "femp_code": "Nº 12",
+      "femp_title": "Ayudas sociales (otorgadas a personas y organizaciones)",
+      "package_id": "subvenciones-nominativas",
+      "csv_url": "https://opendata.vlci.valencia.es/dataset/904f9107-0d66-43ab-b247-f99c06a30f3f/resource/6cf94de2-4dd4-41e7-89b6-7638263599ee/download/subvenciones-nominativas.csv"
+    },
+    "femp20_censo_actividades_iae": {
+      "femp_code": "Nº 20",
+      "femp_title": "Censo de empresas y agentes económicos",
+      "package_id": "recibos_iae_2020-2025",
+      "csv_url": "https://opendata.vlci.valencia.es/dataset/573817da-39bd-4982-bb04-b5445027a278/resource/f9bdd60c-0fb8-4ed4-8d77-6c22a89e3e33/download/recibos_iae_2020-2025.csv",
+      "terrazas_package_id": "recibos-mesas-y-sillas-2020-2025",
+      "terrazas_csv_url": "https://opendata.vlci.valencia.es/dataset/33f175fc-b444-41d0-9111-9ccebc4e4cf7/resource/a2656f3e-c9a3-4d4c-a1a4-7ee300e33999/download/recibos-mesas-y-sillas-2020-2025.csv"
+    },
+    "femp40_facturas_presupuesto": {
+      "femp_code": "Nº 40",
+      "femp_title": "Facturas municipales",
+      "package_id": "presupuesto-de-gastos",
+      "csv_url": "https://opendata.vlci.valencia.es/dataset/e6ed3b3f-7efd-478b-8e45-c8dc3ed15066/resource/40bfee57-c0a0-4d5b-adfc-d36888588066/download/presupuesto-de-gastos.csv",
+      "caja_fija_package_id": "caja_fija",
+      "caja_fija_csv_url": "https://opendata.vlci.valencia.es/dataset/f4be3ee8-4b7f-4f96-96d0-f247d6460b2e/resource/4048a7fc-a30c-4a67-86a0-04b208f0bc9d/download/anticipos-de-caja-fija-2022-2024.csv"
+    }
+  },
+  "oficina_estadistica_valencia": {
+    "web": "https://www.valencia.es/cas/estadistica-quienes-somos",
+    "email_solicitudes": "infoestadistica@valencia.es"
+  },
+  "canales_gobernanza": {
+    "solicitud_datos_ayuntamiento": "https://www.valencia.es/web/gobierno-abierto/cas/datos-abiertos/contacta",
+    "casos_uso_ayuntamiento": "https://www.valencia.es/web/gobierno-abierto/cas/datos-abiertos/reutilizacion/reutilizacion-datos-abiertos/casos-de-uso",
+    "premios_datos_abiertos": "https://www.valencia.es/web/gobierno-abierto/cas/datos-abiertos/reutilizacion/reutilizacion-datos-abiertos/premios-de-datos-abiertos-y-periodismo-de-datos",
+    "las_naves_email": "datoseguro@lasnaves.com",
+    "upv_dades_valencia": "https://dadesvalencia.webs.upv.es/proyectos/"
+  },
+  "gva_viviendas_turisticas_ficha": "https://dadesobertes.gva.es/es/dataset/tur-gestur-vt/resource/b1bdc28e-9813-422a-ab7a-63c21290493d",
+  "valencia_estadistica_sede": "https://sede.valencia.es/sede/registro/procedimiento/AE.OT.10?lang=1",
+  "guia_femp_80_datasets_pdf": "https://redtransparenciayparticipacion.es/wp-content/uploads/2025/03/Datos-abiertos-80-conjuntos-de-datos.pdf"
 }

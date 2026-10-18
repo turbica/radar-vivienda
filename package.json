@@ -1,0 +1,29 @@
+{
+  "name": "radar-vivienda",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Radar de Presión Residencial, Desplazamiento Comercial y Equidad de Barrio en València",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/turbica/radar-vivienda.git"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.6.5",
+  "scripts": {
+    "collect": "pnpm --filter @radar-vivienda/collector collect",
+    "process": "pnpm --filter @radar-vivienda/collector process",
+    "data:sync": "pnpm --filter @radar-vivienda/collector data:sync",
+    "dev": "pnpm --filter @radar-vivienda/web dev",
+    "build": "pnpm --filter @radar-vivienda/collector build && pnpm --filter @radar-vivienda/web build",
+    "preview": "pnpm --filter @radar-vivienda/web preview",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.2"
+  }
+}

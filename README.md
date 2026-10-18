@@ -13,15 +13,20 @@ Observatorio vivo de turistificación y vulnerabilidad barrial en València.
 
 Proyecto social de datos abiertos de València y la Comunitat Valenciana. Forma parte de una iniciativa de tres proyectos paralelos (`escudo-hidrologico`, `monitor-vmp` y este), nacidos del informe [`doc/informe-datos-abiertos-valencia.md`](doc/informe-datos-abiertos-valencia.md).
 
-## Estructura
+## Estructura y Documentación
 
 ```
-config/fuentes.json   Endpoints, datasets y URLs de origen
+config/fuentes.json   Endpoints, datasets y URLs de origen (única fuente de verdad)
 data/raw/             Descargas periódicas tal cual llegan (no versionado)
-data/processed/       Datos limpios y cruzados (no versionado)
-src/                  Colectores y procesado
-doc/                  Informe de origen y documentación
+data/processed/       Datos limpios y cruzados en Parquet/GeoJSON/JSON (no versionado)
+src/                  Colectores, cálculo diferencial DuckDB y sincronización de datos
+web/                  Panel web del observatorio (Astro + React 19 + MapLibre GL JS)
+doc/                  Informe de origen, arquitectura y guía de despliegue
 ```
+
+- **Arquitectura técnica**: [`doc/arquitectura.md`](doc/arquitectura.md)
+- **Guía de despliegue y operación (Docker / GCP Free Tier / Local)**: [`doc/despliegue.md`](doc/despliegue.md)
+- **Informe de investigación original**: [`doc/informe-datos-abiertos-valencia.md`](doc/informe-datos-abiertos-valencia.md)
 
 ## Canales oficiales
 

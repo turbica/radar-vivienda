@@ -1,0 +1,65 @@
+name: Ingesta Semanal de Datos Abiertos
+
+on:
+  schedule:
+    # Todos los lunes a las 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ingestar-y-publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v7
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.6.5
+
+      - name: Configurar Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Instalar dependencias
+        run: pnpm install
+
+      - name: Sincronizar histórico previo desde GitHub Releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm data:sync || echo "Sin snapshots previos publicados aún."
+
+      - name: Ejecutar colectores y cálculo diferencial (DuckDB)
+        run: pnpm collect
+
+      - name: Empaquetar snapshots (data/raw y data/processed)
+        id: pack
+        run: |
+          FECHA=$(date -u +"%Y-%m-%d")
+          echo "fecha=$FECHA" >> "$GITHUB_OUTPUT"
+          tar -czf "radar-vivienda-snapshots-${FECHA}.tar.gz" data/raw data/processed
+          cp "radar-vivienda-snapshots-${FECHA}.tar.gz" "radar-vivienda-snapshots-latest.tar.gz"
+
+      - name: Publicar snapshot en GitHub Releases (histórico abierto)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="snapshots-${{ steps.pack.outputs.fecha }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "radar-vivienda-snapshots-${{ steps.pack.outputs.fecha }}.tar.gz" \
+              "radar-vivienda-snapshots-latest.tar.gz" \
+              --clobber
+          else
+            gh release create "$TAG" \
+              "radar-vivienda-snapshots-${{ steps.pack.outputs.fecha }}.tar.gz" \
+              "radar-vivienda-snapshots-latest.tar.gz" \
+              --title "Instantánea de datos (${{ steps.pack.outputs.fecha }})" \
+              --notes "Captura semanal automatizada de viviendas turísticas GVA (tur-gestur-vt) y datasets municipales CKAN de València."
+          fi
