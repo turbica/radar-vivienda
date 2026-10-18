@@ -1,0 +1,530 @@
+---
+import "../styles/global.css";
+import fuentes from "../../../config/fuentes.json";
+
+interface Props {
+  title: string;
+  description: string;
+  currentPath: "/" | "/metodologia" | "/analisis" | "/gobernanza";
+  snapshotFile?: string;
+  snapshotSha256?: string;
+  updatedAt?: string;
+  extraJsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
+}
+
+const {
+  title,
+  description,
+  currentPath,
+  snapshotFile = "2026-10-18_tur-gestur-vt.csv",
+  snapshotSha256 = "f074fb223a29ca60",
+  updatedAt = new Date().toISOString(),
+  extraJsonLd,
+} = Astro.props;
+
+const siteOrigin = "https://radar-vivienda.valencia.es";
+const canonicalUrl = `${siteOrigin}${currentPath === "/" ? "/" : currentPath}`;
+const dataBaseUrl = (import.meta.env.PUBLIC_DATA_BASE_URL ?? "/data/processed").replace(
+  /\/+$/,
+  ""
+);
+
+const navItems = [
+  {
+    href: "/",
+    label: "Observatorio y Mapa",
+    mobileLabel: "Observatorio",
+    badge: "88 barrios",
+  },
+  {
+    href: "/metodologia",
+    label: "Guía de Métricas (¿Qué mido?)",
+    mobileLabel: "Guía Métricas",
+    badge: "ISVP",
+  },
+  {
+    href: "/analisis",
+    label: "Series y Distritos",
+    mobileLabel: "Series y CP",
+    badge: "2015–2026",
+  },
+  {
+    href: "/gobernanza",
+    label: "Gobernanza y Datos Abiertos",
+    mobileLabel: "Gobernanza",
+    badge: "FEMP 80",
+  },
+] as const;
+
+const breadcrumbNameMap: Record<Props["currentPath"], string> = {
+  "/": "Observatorio y Mapa de Barrios",
+  "/metodologia": "Guía Ciudadana de Métricas y Metodología ISVP",
+  "/analisis": "Evolución Histórica (2015–2026), Distritos y Códigos Postales",
+  "/gobernanza": "Auditoría FEMP-80, Transparencia (Ley 1/2022) y Datos Abiertos",
+};
+
+const baseJsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Radar Vivienda València",
+    alternateName:
+      "Radar de Presión Residencial, Desplazamiento Comercial y Equidad de Barrio en València",
+    url: siteOrigin,
+    inLanguage: "es-ES",
+    license: "https://www.gnu.org/licenses/agpl-3.0.html",
+    description,
+    publisher: {
+      "@type": "Organization",
+      name: "Observatorio Ciudadano de Datos Abiertos de València (radar-vivienda)",
+      url: "https://github.com/turbica/radar-vivienda",
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    name: "Serie Longitudinal de Viviendas Turísticas, Comercio Local y Vulnerabilidad por Barrios en València",
+    description:
+      "Cruce semanal automatizado del registro de viviendas de uso turístico de la Generalitat Valenciana (tur-gestur-vt) con el catálogo CKAN del Ayuntamiento de València (censo IAE, terrazas, quejas ciudadanas FEMP 11, subvenciones FEMP 12, presupuesto FEMP 40 y vulnerabilidad barrial) en los 88 barrios de València.",
+    url: canonicalUrl,
+    license: "https://www.gnu.org/licenses/agpl-3.0.html",
+    isAccessibleForFree: true,
+    creator: {
+      "@type": "Organization",
+      name: "radar-vivienda · Observatorio Cívico Open Source",
+      url: "https://github.com/turbica/radar-vivienda",
+    },
+    spatialCoverage: {
+      "@type": "Place",
+      name: "València, Comunitat Valenciana, España",
+    },
+    temporalCoverage: "2015/2026",
+    distribution: [
+      {
+        "@type": "DataDownload",
+        encodingFormat: "application/geo+json",
+        contentUrl: `${siteOrigin}${dataBaseUrl}/barrios_vulnerabilidad.geojson`,
+      },
+      {
+        "@type": "DataDownload",
+        encodingFormat: "application/json",
+        contentUrl: `${siteOrigin}${dataBaseUrl}/resumen_observatorio.json`,
+      },
+      {
+        "@type": "DataDownload",
+        encodingFormat: "application/vnd.apache.parquet",
+        contentUrl: `${siteOrigin}${dataBaseUrl}/viviendas_turisticas_valencia.parquet`,
+      },
+    ],
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Inicio · Observatorio",
+        item: `${siteOrigin}/`,
+      },
+      ...(currentPath !== "/"
+        ? [
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: breadcrumbNameMap[currentPath],
+              item: canonicalUrl,
+            },
+          ]
+        : []),
+    ],
+  },
+  ...(Array.isArray(extraJsonLd)
+    ? extraJsonLd
+    : extraJsonLd
+      ? [extraJsonLd]
+      : []),
+];
+
+const formattedDate = new Date(updatedAt).toLocaleDateString("es-ES", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="author" content="Observatorio Cívico Radar Vivienda València" />
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Open Graph / Social Meta -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_ES" />
+    <meta property="og:site_name" content="Radar Vivienda València" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={`${siteOrigin}/og-cover.svg`} />
+    <meta property="og:image:alt" content="Radar de Presión Residencial, Desplazamiento Comercial y Equidad de Barrio en València" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={`${siteOrigin}/og-cover.svg`} />
+
+    <!-- Schema.org JSON-LD -->
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify(baseJsonLd)}
+    />
+  </head>
+  <body class="min-h-screen bg-[#f8fafc] pb-20 text-slate-900 antialiased md:pb-0">
+    <a href="#main-content" class="skip-link">
+      Saltar al contenido principal
+    </a>
+
+    <!-- Barra institucional superior de trazabilidad y estado del observatorio -->
+    <div class="border-b border-slate-800 bg-slate-950 text-slate-200">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs sm:px-6">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-950/90 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-700/60">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>
+            OBSERVATORIO ACTIVO
+          </span>
+          <span class="text-slate-300">
+            València · Datos públicos verificables
+          </span>
+          <span class="hidden text-slate-600 sm:inline" aria-hidden="true">|</span>
+          <span class="hidden font-mono text-[11px] text-slate-300 sm:inline">
+            Captura: <strong class="text-white">{snapshotFile}</strong> ({formattedDate})
+          </span>
+          <span class="hidden text-slate-600 lg:inline" aria-hidden="true">|</span>
+          <span
+            class="hidden font-mono text-[11px] text-slate-300 lg:inline"
+            title="Firma criptográfica SHA-256 del archivo en bruto descargado en data/raw/"
+          >
+            SHA-256: <code class="text-sky-300">{snapshotSha256.slice(0, 14)}…</code>
+          </span>
+        </div>
+
+        <div class="flex items-center gap-3 text-[11px] font-medium">
+          <a
+            href={`${dataBaseUrl}/barrios_vulnerabilidad.geojson`}
+            download="barrios_vulnerabilidad.geojson"
+            class="text-sky-300 underline decoration-sky-700 underline-offset-2 hover:text-white"
+          >
+            Descargar GeoJSON
+          </a>
+          <span class="text-slate-700" aria-hidden="true">·</span>
+          <a
+            href={`${dataBaseUrl}/viviendas_turisticas_valencia.parquet`}
+            download="viviendas_turisticas_valencia.parquet"
+            class="text-sky-300 underline decoration-sky-700 underline-offset-2 hover:text-white"
+          >
+            Parquet
+          </a>
+          <span class="text-slate-700" aria-hidden="true">·</span>
+          <a
+            href="https://github.com/turbica/radar-vivienda"
+            target="_blank"
+            rel="noreferrer"
+            class="text-slate-200 underline decoration-slate-600 underline-offset-2 hover:text-white"
+          >
+            Código Abierto (AGPL-3.0)
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cabecera principal con navegación pública -->
+    <header class="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 backdrop-blur-md">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <a
+          href="/"
+          class="group flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700"
+        >
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-xs transition-transform duration-150 group-hover:scale-105">
+            <svg
+              class="h-6 w-6 text-sky-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" class=" opacity-35" />
+              <circle cx="12" cy="12" r="5" class="opacity-70" />
+              <path d="M12 12L18 6" class="text-amber-400" />
+              <circle cx="16.5" cy="7.5" r="1.5" fill="currentColor" class="text-red-400" />
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" class="text-white" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-base font-extrabold tracking-tight text-slate-900 sm:text-lg">
+                Radar Vivienda <span class="text-sky-800">València</span>
+              </span>
+              <span class="hidden rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700 sm:inline-block">
+                v1.0
+              </span>
+            </div>
+            <p class="text-xs text-slate-600">
+              Presión Residencial, Comercio Local y Equidad en los 88 Barrios
+            </p>
+          </div>
+        </a>
+
+        <!-- Navegación principal en escritorio y tablet -->
+        <nav
+          aria-label="Navegación principal del portal"
+          class="hidden items-center gap-1 md:flex"
+        >
+          {
+            navItems.map((item) => {
+              const isActive = currentPath === item.href;
+              return (
+                <a
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  class={`interactive-btn flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors ${
+                    isActive
+                      ? "bg-slate-900 text-white shadow-2xs"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  <span
+                    class={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold ${
+                      isActive
+                        ? "bg-sky-500/25 text-sky-200"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                </a>
+              );
+            })
+          }
+        </nav>
+
+        <!-- Botón rápido de ayuda metodológica en móvil -->
+        <div class="flex items-center gap-2 md:hidden">
+          <a
+            href="/metodologia"
+            class="interactive-btn inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-900"
+          >
+            <span>¿Qué significan los datos?</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Contenido principal de la página -->
+    <main id="main-content">
+      <slot />
+    </main>
+
+    <!-- Barra de navegación inferior fija para dispositivos móviles (Touch Targets ≥ 48x48px) -->
+    <nav
+      aria-label="Navegación móvil inferior"
+      class="fixed right-0 bottom-0 left-0 z-50 border-t border-slate-200 bg-white/98 px-2 py-1.5 shadow-lg backdrop-blur-md md:hidden"
+    >
+      <div class="mx-auto grid max-w-md grid-cols-4 gap-1">
+        {
+          navItems.map((item) => {
+            const isActive = currentPath === item.href;
+            return (
+              <a
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                class={`interactive-btn flex min-h-[48px] flex-col items-center justify-center rounded-xl px-1 py-1 text-center ${
+                  isActive
+                    ? "bg-slate-900 font-bold text-white"
+                    : "font-medium text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                <span class="text-[11px] leading-tight">{item.mobileLabel}</span>
+                <span
+                  class={`mt-0.5 font-mono text-[9px] ${
+                    isActive ? "text-sky-300" : "text-slate-500"
+                  }`}
+                >
+                  {item.badge}
+                </span>
+              </a>
+            );
+          })
+        }
+      </div>
+    </nav>
+
+    <!-- Pie de página institucional, metodológico y de licencias abiertas -->
+    <footer class="mt-16 border-t border-slate-200 bg-white text-slate-700">
+      <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+        <div class="grid gap-8 md:grid-cols-12">
+          <div class="space-y-3 md:col-span-5">
+            <div class="flex items-center gap-2.5">
+              <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-sky-400">
+                <svg
+                  class="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 12L17 7" />
+                </svg>
+              </div>
+              <span class="text-base font-extrabold text-slate-900">
+                Radar Vivienda València
+              </span>
+            </div>
+            <p class="text-xs leading-relaxed text-slate-600">
+              Observatorio cívico, longitudinal y auditable sobre turistificación,
+              desplazamiento comercial y vulnerabilidad urbana en los 88 barrios
+              de València. Construido como bien público digital de código abierto
+              bajo licencia <strong>GNU AGPL-3.0</strong>.
+            </p>
+            <p class="text-xs text-slate-600">
+              Parte de la iniciativa abierta de observatorios ciudadanos junto con
+              <strong>escudo-hidrologico</strong> y <strong>monitor-vmp</strong>,
+              impulsada sobre el conector común{" "}
+              <a
+                href="https://github.com/turbica/valencia-open-data-core"
+                target="_blank"
+                rel="noreferrer"
+                class="font-semibold text-sky-800 underline hover:text-slate-950"
+              >
+                valencia-open-data-core
+              </a>.
+            </p>
+          </div>
+
+          <div class="space-y-2.5 md:col-span-3">
+            <h2 class="text-xs font-bold tracking-wider text-slate-900 uppercase">
+              Secciones del Portal
+            </h2>
+            <ul class="space-y-2 text-xs">
+              <li>
+                <a href="/" class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline">
+                  Mapa Interactivo y Explorador de Barrios
+                </a>
+              </li>
+              <li>
+                <a href="/metodologia" class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline">
+                  Guía de Métricas y Fórmula del ISVP
+                </a>
+              </li>
+              <li>
+                <a href="/analisis" class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline">
+                  Evolución 2015–2026, Distritos y Códigos Postales
+                </a>
+              </li>
+              <li>
+                <a href="/gobernanza" class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline">
+                  Auditoría FEMP-80 y Solicitudes Ley 1/2022
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="space-y-2.5 md:col-span-4">
+            <h2 class="text-xs font-bold tracking-wider text-slate-900 uppercase">
+              Fuentes Oficiales y Gobernanza
+            </h2>
+            <ul class="space-y-2 text-xs">
+              <li>
+                <a
+                  href={fuentes.gva_viviendas_turisticas_ficha}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline"
+                >
+                  Dades Obertes GVA — Censo VUT (tur-gestur-vt)
+                </a>
+              </li>
+              <li>
+                <a
+                  href={fuentes.valencia_ckan_portal}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline"
+                >
+                  Portal de Datos Abiertos del Ayuntamiento de València
+                </a>
+              </li>
+              <li>
+                <a
+                  href={fuentes.oficina_estadistica_valencia.web}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline"
+                >
+                  Oficina de Estadística del Ayuntamiento de València
+                </a>
+              </li>
+              <li>
+                <a
+                  href={fuentes.canales_gobernanza.solicitud_datos_ayuntamiento}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline"
+                >
+                  Solicitar Apertura de Conjuntos de Datos (Transparencia)
+                </a>
+              </li>
+              <li>
+                <a
+                  href={fuentes.canales_gobernanza.upv_dades_valencia}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="font-medium text-slate-700 underline-offset-2 hover:text-slate-950 hover:underline"
+                >
+                  Cátedra Gobernanza y Dades València (UPV / Las Naves)
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-6 text-xs text-slate-600">
+          <p>
+            Los conjuntos de datos primarios conservan la licencia de reutilización de
+            la Generalitat Valenciana y del Ayuntamiento de València. El motor
+            analítico y las visualizaciones se distribuyen bajo GNU AGPL-3.0.
+          </p>
+          <div class="flex items-center gap-4 font-mono text-[11px]">
+            <a href="/sitemap.xml" class="hover:text-slate-900 underline">
+              Sitemap XML
+            </a>
+            <a
+              href="https://github.com/turbica/radar-vivienda"
+              target="_blank"
+              rel="noreferrer"
+              class="hover:text-slate-900 underline"
+            >
+              GitHub: turbica/radar-vivienda
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

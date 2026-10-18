@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
-import { Compass, Layers, Box } from "lucide-react";
+import type maplibreglType from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { BookOpen, Box, Compass, Layers } from "lucide-react";
 import type { BarrioIndicators, MapMetricKey } from "../types/observatory";
 
 export const METRIC_CONFIG: Record<
@@ -8,17 +9,22 @@ export const METRIC_CONFIG: Record<
   {
     label: string;
     shortLabel: string;
+    weightBadge: string;
     unit: string;
     description: string;
+    citizenHint: string;
     stops: Array<[number, string]>;
   }
 > = {
   isvp: {
     label: "Índice Sintético de Vulnerabilidad y Presión (ISVP)",
     shortLabel: "ISVP Global",
+    weightBadge: "100%",
     unit: "/ 100",
     description:
-      "Combina presión de pisos turísticos (35%), desplazamiento comercial (25%), quejas vecinales de deterioro (20%) y vulnerabilidad socioeconómica (20%).",
+      "Índice compuesto que pondera presión turística (35%), desplazamiento comercial (25%), quejas vecinales de convivencia/deterioro (20%) y vulnerabilidad social (20%).",
+    citizenHint:
+      "Valores ≥ 46 indican alerta alta; valores ≥ 62 indican saturación crítica acumulada.",
     stops: [
       [0, "#e0f2fe"],
       [25, "#7dd3fc"],
@@ -29,11 +35,14 @@ export const METRIC_CONFIG: Record<
     ],
   },
   presion_turistica: {
-    label: "Presión Residencial de Viviendas Turísticas",
+    label: "Vector 1 · Presión Residencial de Viviendas Turísticas",
     shortLabel: "Presión Turística",
+    weightBadge: "35%",
     unit: "/ 100",
     description:
-      "Basado en densidad de licencias VUT por km², plazas turísticas vigentes y velocidad de nuevas altas (2024–2026) en el registro GVA.",
+      "Calculado a partir de la densidad de licencias VUT por km², plazas turísticas ofertadas y velocidad de nuevas altas (2024–2026) en el registro GVA.",
+    citizenHint:
+      "Mide la competencia directa del alquiler turístico sobre el parque de vivienda habitual.",
     stops: [
       [0, "#f0fdf4"],
       [20, "#86efac"],
@@ -43,11 +52,14 @@ export const METRIC_CONFIG: Record<
     ],
   },
   desplazamiento_comercial: {
-    label: "Riesgo de Desplazamiento Comercial y Saturación de Terrazas",
+    label: "Vector 2 · Desplazamiento Comercial y Terrazas",
     shortLabel: "Comercio y Terrazas",
+    weightBadge: "25%",
     unit: "/ 100",
     description:
       "Cruza la variación de recibos del Impuesto de Actividades Económicas (IAE, FEMP Nº 20) con la densidad de ocupación de vía pública por mesas y sillas.",
+    citizenHint:
+      "Detecta la sustitución de comercio cotidiano de proximidad por monocultivo hostelero.",
     stops: [
       [0, "#eff6ff"],
       [25, "#93c5fd"],
@@ -57,11 +69,14 @@ export const METRIC_CONFIG: Record<
     ],
   },
   brecha_equidad_urbana: {
-    label: "Brecha de Equidad Urbana y Deterioro Reportado",
+    label: "Vector 3 · Brecha de Equidad Urbana y Convivencia",
     shortLabel: "Equidad y Avisos",
+    weightBadge: "20%",
     unit: "/ 100",
     description:
       "Mide la densidad de avisos y quejas vecinales (FEMP Nº 11: ruido, convivencia, limpieza y desperfectos viarios) frente a la dotación de equipamientos.",
+    citizenHint:
+      "Refleja dónde el desgaste del espacio público y el ruido nocturno superan la capacidad de mantenimiento.",
     stops: [
       [0, "#f5f3ff"],
       [25, "#c4b5fd"],
@@ -71,11 +86,14 @@ export const METRIC_CONFIG: Record<
     ],
   },
   vulnerabilidad_residencial: {
-    label: "Vulnerabilidad Socioeconómica y Demográfica Amplificada",
+    label: "Vector 4 · Vulnerabilidad Socioeconómica Amplificada",
     shortLabel: "Vulnerabilidad Social",
+    weightBadge: "20%",
     unit: "/ 100",
     description:
       "Integra el índice municipal de vulnerabilidad (económica, demográfica y de equipamientos) amplificado por la presión habitacional turística del barrio.",
+    citizenHint:
+      "Identifica vecindarios con menor colchón de renta o población envejecida más expuestos a expulsión residencial.",
     stops: [
       [0, "#f8fafc"],
       [25, "#94a3b8"],
@@ -103,8 +121,10 @@ export function RadarMap({
   onSelectBarrio,
   barriosByCode,
 }: RadarMapProps) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapRef = useRef<maplibreglType.Map | null>(null);
+  const [shouldInitMap, setShouldInitMap] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [is3D, setIs3D] = useState(false);
   const [hoveredInfo, setHoveredInfo] = useState<{
@@ -117,7 +137,9 @@ export function RadarMap({
     avisos: number;
   } | null>(null);
 
-  const buildFillColorExpression = (m: MapMetricKey): maplibregl.ExpressionSpecification => {
+  const buildFillColorExpression = (
+    m: MapMetricKey
+  ): maplibreglType.ExpressionSpecification => {
     const stops = METRIC_CONFIG[m].stops;
     const expr: unknown[] = [
       "interpolate",
@@ -127,51 +149,91 @@ export function RadarMap({
     for (const [val, color] of stops) {
       expr.push(val, color);
     }
-    return expr as maplibregl.ExpressionSpecification;
+    return expr as maplibreglType.ExpressionSpecification;
   };
 
+  // Lazy trigger when map wrapper enters viewport or after idle
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (shouldInitMap) return;
+    const el = wrapperRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setShouldInitMap(true);
+      return;
+    }
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: "https://tiles.openfreemap.org/styles/positron",
-      center: [-0.3763, 39.4699],
-      zoom: 12.1,
-      pitch: 0,
-      bearing: 0,
-      attributionControl: false,
-    });
-
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    map.addControl(
-      new maplibregl.AttributionControl({
-        compact: true,
-        customAttribution:
-          "Datos: GVA Dades Obertes (tur-gestur-vt) & Ajuntament de València Open Data",
-      }),
-      "bottom-right"
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setShouldInitMap(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" }
     );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [shouldInitMap]);
 
-    map.on("load", () => {
-      setMapLoaded(true);
-    });
+  useEffect(() => {
+    if (!shouldInitMap || !containerRef.current) return;
+    let cancelled = false;
+    let instance: maplibreglType.Map | null = null;
 
-    mapRef.current = map;
+    async function initMap() {
+      const mod = await import("maplibre-gl");
+      if (cancelled || !containerRef.current) return;
+      const maplibregl = mod.default;
+
+      instance = new maplibregl.Map({
+        container: containerRef.current,
+        style: "https://tiles.openfreemap.org/styles/positron",
+        center: [-0.3763, 39.4699],
+        zoom: 12.1,
+        pitch: 0,
+        bearing: 0,
+        attributionControl: false,
+      });
+
+      instance.addControl(
+        new maplibregl.NavigationControl({ visualizePitch: true }),
+        "top-right"
+      );
+      instance.addControl(
+        new maplibregl.AttributionControl({
+          compact: true,
+          customAttribution:
+            "GVA Dades Obertes (tur-gestur-vt) & Ajuntament de València",
+        }),
+        "bottom-right"
+      );
+
+      instance.on("load", () => {
+        if (!cancelled) {
+          setMapLoaded(true);
+        }
+      });
+
+      mapRef.current = instance;
+    }
+
+    initMap();
 
     return () => {
-      map.remove();
+      cancelled = true;
+      if (instance) {
+        instance.remove();
+      }
       mapRef.current = null;
     };
-  }, []);
+  }, [shouldInitMap]);
 
-  // Añadir o actualizar fuente y capas cuando carga el mapa o el GeoJSON
+  // Add or update GeoJSON source and choropleth/3D layers
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !geojson) return;
 
     const existingSource = map.getSource("barrios-source") as
-      | maplibregl.GeoJSONSource
+      | maplibreglType.GeoJSONSource
       | undefined;
 
     if (existingSource) {
@@ -188,7 +250,7 @@ export function RadarMap({
         source: "barrios-source",
         paint: {
           "fill-color": buildFillColorExpression(metric),
-          "fill-opacity": 0.74,
+          "fill-opacity": 0.76,
         },
       });
 
@@ -207,7 +269,7 @@ export function RadarMap({
             14,
           ],
           "fill-extrusion-base": 0,
-          "fill-extrusion-opacity": 0.82,
+          "fill-extrusion-opacity": 0.84,
         },
       });
 
@@ -218,7 +280,7 @@ export function RadarMap({
         paint: {
           "line-color": "#1e293b",
           "line-width": 1,
-          "line-opacity": 0.45,
+          "line-opacity": 0.48,
         },
       });
 
@@ -228,13 +290,13 @@ export function RadarMap({
         source: "barrios-source",
         filter: ["==", ["get", "coddistbar"], selectedBarrioCode ?? ""],
         paint: {
-          "line-color": "#1e3a8a",
-          "line-width": 3.2,
+          "line-color": "#0f172a",
+          "line-width": 3.4,
           "line-opacity": 1,
         },
       });
 
-      const handleMove = (e: maplibregl.MapLayerMouseEvent) => {
+      const handleMove = (e: maplibreglType.MapLayerMouseEvent) => {
         const feat = e.features?.[0];
         if (!feat) return;
         map.getCanvas().style.cursor = "pointer";
@@ -255,7 +317,7 @@ export function RadarMap({
         setHoveredInfo(null);
       };
 
-      const handleClick = (e: maplibregl.MapLayerMouseEvent) => {
+      const handleClick = (e: maplibreglType.MapLayerMouseEvent) => {
         const feat = e.features?.[0];
         const code = feat?.properties?.coddistbar;
         if (code) {
@@ -272,7 +334,7 @@ export function RadarMap({
     }
   }, [mapLoaded, geojson]);
 
-  // Actualizar expresión de color cuando cambia la métrica activa
+  // Update color expression when metric changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !map.getLayer("barrios-fill")) return;
@@ -289,7 +351,7 @@ export function RadarMap({
     }
   }, [metric, mapLoaded]);
 
-  // Actualizar filtro de barrio seleccionado y centrar suavemente
+  // Center on selected neighborhood
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !map.getLayer("barrios-selected-outline")) return;
@@ -305,8 +367,8 @@ export function RadarMap({
       if (barrio && Array.isArray(barrio.centroid)) {
         map.flyTo({
           center: barrio.centroid,
-          zoom: Math.max(map.getZoom(), 13.4),
-          duration: 650,
+          zoom: Math.max(map.getZoom(), 13.3),
+          duration: 600,
           essential: true,
         });
       }
@@ -325,7 +387,7 @@ export function RadarMap({
         "visibility",
         next3D ? "visible" : "none"
       );
-      map.setPaintProperty("barrios-fill", "fill-opacity", next3D ? 0.15 : 0.74);
+      map.setPaintProperty("barrios-fill", "fill-opacity", next3D ? 0.15 : 0.76);
     }
     map.easeTo({
       pitch: next3D ? 48 : 0,
@@ -349,15 +411,28 @@ export function RadarMap({
   const activeConfig = METRIC_CONFIG[metric];
 
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-xs">
-      {/* Selector de capas cartográficas */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-3">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-          <Layers className="h-4 w-4 text-blue-700" aria-hidden="true" />
-          <span>Capa activa:</span>
+    <div
+      ref={wrapperRef}
+      className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs"
+    >
+      {/* Selector superior de capas cartográficas */}
+      <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+            <Layers className="h-4 w-4 text-sky-700" aria-hidden="true" />
+            <span>Capa cartográfica activa:</span>
+          </div>
+          <a
+            href={`/metodologia#${metric}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-sky-800 underline decoration-sky-300 underline-offset-2 hover:text-slate-950"
+          >
+            <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>¿Cómo se calcula esta capa?</span>
+          </a>
         </div>
+
         <div
-          className="flex flex-wrap gap-1.5"
+          className="mt-2.5 flex flex-wrap gap-1.5"
           role="group"
           aria-label="Seleccionar indicador cartográfico"
         >
@@ -368,96 +443,137 @@ export function RadarMap({
                 key={key}
                 type="button"
                 onClick={() => onMetricChange(key)}
-                className={`interactive-btn rounded-lg px-2.5 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${
+                aria-pressed={isSelected}
+                className={`interactive-btn inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
                   isSelected
-                    ? "bg-blue-800 text-white shadow-xs"
-                    : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                    ? "bg-slate-900 text-white shadow-2xs"
+                    : "border border-slate-200/90 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
-                {METRIC_CONFIG[key].shortLabel}
+                <span>{METRIC_CONFIG[key].shortLabel}</span>
+                <span
+                  className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                    isSelected
+                      ? "bg-sky-500/25 text-sky-200"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {METRIC_CONFIG[key].weightBadge}
+                </span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Lienzo del mapa */}
-      <div className="relative h-[510px] w-full overflow-hidden">
+      {/* Lienzo del mapa con altura fija reservada (CLS = 0.000) */}
+      <div className="relative h-[420px] w-full overflow-hidden bg-slate-100 sm:h-[490px]">
+        {!mapLoaded && (
+          <div
+            aria-hidden="true"
+            className="civic-grid-light absolute inset-0 flex flex-col items-center justify-center p-6 text-center"
+          >
+            <div className="rounded-2xl border border-slate-200 bg-white/95 px-5 py-4 shadow-sm">
+              <p className="text-xs font-bold text-slate-800">
+                Cargando cartografía vectorial de los 88 barrios de València…
+              </p>
+              <p className="mt-1 text-[11px] text-slate-600">
+                Polígonos oficiales municipales + indicadores cruzados en DuckDB
+              </p>
+            </div>
+          </div>
+        )}
+
         <div ref={containerRef} className="h-full w-full" />
 
         {/* Controles flotantes superiores izquierdos */}
-        <div className=" absolute top-3 left-3 z-10 flex flex-wrap gap-2">
+        <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={resetCamera}
-            className="interactive-btn flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white/95 px-2.5 py-1.5 text-xs font-medium text-slate-800 shadow-sm backdrop-blur-xs hover:bg-slate-50"
-            title="Centrar vista en València"
+            className="interactive-btn flex min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm backdrop-blur-xs hover:bg-slate-50"
+            title="Centrar vista en toda la ciudad de València"
           >
-            <Compass className="h-3.5 w-3.5 text-blue-700" aria-hidden="true" />
-            <span>Centrar València</span>
+            <Compass className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />
+            <span>Vista Ciudad</span>
           </button>
 
           <button
             type="button"
             onClick={toggle3DView}
-            className={`interactive-btn flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium shadow-sm backdrop-blur-xs ${
+            aria-pressed={is3D}
+            className={`interactive-btn flex min-h-[38px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur-xs ${
               is3D
-                ? "border-blue-800 bg-blue-800 text-white"
+                ? "border-slate-900 bg-slate-900 text-white"
                 : "border-slate-300 bg-white/95 text-slate-800 hover:bg-slate-50"
             }`}
-            title="Alternar extrusión 3D por intensidad del indicador"
+            title="Alternar relieve 3D proporcional a la presión del indicador"
           >
             <Box className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{is3D ? "Vista 2D" : "Extrusión 3D"}</span>
+            <span>{is3D ? "Volver a 2D" : "Relieve 3D"}</span>
           </button>
         </div>
 
-        {/* Tooltip flotante en hover */}
+        {/* Tooltip flotante al pasar el puntero (escritorio) */}
         {hoveredInfo && (
           <div className="pointer-events-none absolute top-14 left-3 z-10 max-w-xs rounded-xl border border-slate-200 bg-white/95 p-3 shadow-md backdrop-blur-xs">
             <div className="flex items-center justify-between gap-3">
-              <span className="font-mono text-[11px] font-semibold text-blue-800">
-                #{hoveredInfo.coddistbar} · {hoveredInfo.distrito}
+              <span className="font-mono text-[11px] font-bold text-sky-800">
+                Barrio #{hoveredInfo.coddistbar} · {hoveredInfo.distrito}
               </span>
             </div>
-            <p className="mt-0.5 text-sm font-bold text-slate-900">
+            <p className="mt-0.5 text-sm font-extrabold text-slate-900">
               {hoveredInfo.nombre}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-xs">
-              <span className="text-slate-500">{activeConfig.shortLabel}:</span>
+              <span className="text-slate-600">{activeConfig.shortLabel}:</span>
               <span className="font-mono font-bold text-slate-900">
                 {hoveredInfo.score.toFixed(1)} {activeConfig.unit}
               </span>
-              <span className="text-slate-500">VUT vigentes:</span>
+              <span className="text-slate-600">VUT vigentes:</span>
               <span className="font-mono font-semibold text-slate-800">
                 {hoveredInfo.vut} ({hoveredInfo.densidad}/km²)
               </span>
-              <span className="text-slate-500">Avisos vecinales:</span>
+              <span className="text-slate-600">Avisos vecinales:</span>
               <span className="font-mono font-semibold text-slate-800">
                 {hoveredInfo.avisos.toLocaleString("es-ES")}
               </span>
             </div>
           </div>
         )}
+      </div>
 
-        {/* Leyenda inferior izquierda */}
-        <div className="absolute bottom-3 left-3 z-10 max-w-sm rounded-xl border border-slate-200 bg-white/95 px-3.5 py-2.5 shadow-sm backdrop-blur-xs">
-          <p className="text-xs font-semibold text-slate-900">{activeConfig.label}</p>
-          <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
-            {activeConfig.description}
-          </p>
-          <div className="mt-2 flex items-center gap-1.5">
-            {activeConfig.stops.map(([val, color]) => (
-              <div key={val} className="flex flex-1 flex-col items-center">
-                <span
-                  className="h-2.5 w-full rounded-xs border border-slate-300/60"
-                  style={{ backgroundColor: color }}
-                />
-                <span className="mt-0.5 font-mono text-[10px] text-slate-600">
-                  {val}
-                </span>
-              </div>
-            ))}
+      {/* Pie del mapa: Leyenda cromática accesible + explicación en lenguaje claro */}
+      <div className="border-t border-slate-200 bg-slate-50/70 px-4 py-3.5">
+        <div className="grid gap-3 md:grid-cols-12 md:items-center">
+          <div className="space-y-1 md:col-span-7">
+            <p className="text-xs font-bold text-slate-900">{activeConfig.label}</p>
+            <p className="text-xs leading-relaxed text-slate-600">
+              {activeConfig.description}{" "}
+              <strong className="font-semibold text-slate-800">
+                {activeConfig.citizenHint}
+              </strong>
+            </p>
+          </div>
+
+          <div className="md:col-span-5">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+              <span>Menor intensidad (0)</span>
+              <span>Mayor presión (100)</span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-1">
+              {activeConfig.stops.map(([val, color]) => (
+                <div key={val} className="flex flex-1 flex-col items-center">
+                  <span
+                    className="h-3 w-full rounded-xs border border-slate-300/80"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="mt-1 font-mono text-[10px] font-medium text-slate-700">
+                    {val}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

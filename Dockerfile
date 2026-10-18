@@ -56,7 +56,13 @@ RUN printf 'server {\n\
     root /usr/share/nginx/html;\n\
     index index.html;\n\
     gzip on;\n\
-    gzip_types text/plain text/css application/json application/geo+json application/javascript;\n\
+    gzip_min_length 256;\n\
+    gzip_types text/plain text/css text/xml application/xml image/svg+xml application/json application/geo+json application/manifest+json application/javascript;\n\
+    add_header X-Content-Type-Options "nosniff" always;\n\
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
+    location /_astro/ {\n\
+        add_header Cache-Control "public, max-age=31536000, immutable";\n\
+    }\n\
     location /data/processed/ {\n\
         alias /app/data/processed/;\n\
         add_header Cache-Control "public, max-age=300";\n\

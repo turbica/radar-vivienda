@@ -1,18 +1,28 @@
-@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
-@import "maplibre-gl/dist/maplibre-gl.css";
 
 :root {
-  --font-sans: "Fira Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   font-family: var(--font-sans);
   background-color: #f8fafc;
   color: #0f172a;
+  line-height: 1.5;
+  overflow-x: hidden;
 }
 
 .font-mono,
@@ -21,19 +31,66 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Skip link for keyboard and screen reader accessibility (WCAG 2.4.1) */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.75rem 1.25rem;
+  background-color: #0f172a;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25);
+  transition: top 160ms var(--ease-out-strong);
+}
+
+.skip-link:focus {
+  top: 0.75rem;
+  outline: 3px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* Subtle institutional cartographic grid background */
+.civic-grid-bg {
+  background-color: #0f172a;
+  background-image:
+    linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.civic-grid-light {
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
 /* Interactive press and hover states following Emil Kowalski's design engineering rules */
 .interactive-btn {
   cursor: pointer;
   transition:
-    transform 160ms var(--ease-out-strong),
-    background-color 160ms var(--ease-out-strong),
-    border-color 160ms var(--ease-out-strong),
-    color 160ms var(--ease-out-strong),
-    box-shadow 160ms var(--ease-out-strong);
+    transform 150ms var(--ease-out-strong),
+    background-color 150ms var(--ease-out-strong),
+    border-color 150ms var(--ease-out-strong),
+    color 150ms var(--ease-out-strong),
+    box-shadow 150ms var(--ease-out-strong);
 }
 
 .interactive-btn:active {
   transform: scale(0.97);
+}
+
+.interactive-btn:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #0284c7;
+  outline-offset: 2px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -44,11 +101,17 @@ body {
       border-color 180ms var(--ease-out-strong);
   }
   .interactive-card-hover:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow:
+      0 10px 15px -3px rgba(15, 23, 42, 0.06),
+      0 4px 6px -4px rgba(15, 23, 42, 0.04);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *,
   *::before,
   *::after {

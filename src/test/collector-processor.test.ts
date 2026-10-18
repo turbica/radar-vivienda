@@ -45,4 +45,46 @@ describe("radar-vivienda collector & analytical engine unit tests", () => {
     assert.equal(Number(row.altas), 2); // VT-103, VT-104
     assert.equal(Number(row.bajas), 1); // VT-101
   });
+
+  it("validates citizen metrics catalog and plain-language narrative generator", async () => {
+    const catalogUrl = new URL(
+      "../../web/src/lib/metrics-catalog.ts",
+      import.meta.url
+    ).href;
+    const {
+      CORE_VECTORS_GUIDE,
+      EMPIRICAL_METRICS_GLOSSARY,
+      ISVP_LEVELS,
+      buildBarrioNarrative,
+    } = await import(catalogUrl);
+
+    assert.equal(CORE_VECTORS_GUIDE.length, 5);
+    assert.equal(ISVP_LEVELS.length, 4);
+    assert.ok(EMPIRICAL_METRICS_GLOSSARY.length >= 10);
+
+    const narrative = buildBarrioNarrative(
+      {
+        nombre: "RUSFA",
+        distrito: "L'EIXAMPLE",
+        isvp: 68.5,
+        nivel_alerta: "Crítica",
+        vut_activas: 280,
+        plazas_vut: 1120,
+        vut_altas_recientes: 140,
+        densidad_vut_km2: 310.5,
+        presion_turistica: 88.2,
+        desplazamiento_comercial: 74.0,
+        brecha_equidad_urbana: 61.0,
+        vulnerabilidad_residencial: 42.0,
+        recibos_terrazas: 195,
+        avisos_totales: 1850,
+        etiqueta_vulnerabilidad_municipal: "Baja",
+      },
+      33.8,
+      42.3
+    );
+    assert.ok(narrative.includes("Alerta Crítica"));
+    assert.ok(narrative.includes("68.5 sobre 100"));
+  });
 });
+

@@ -1,50 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
+  ArrowLeftRight,
+  BookOpen,
   Building2,
-  Check,
-  Copy,
-  Database,
-  Download,
-  ExternalLink,
-  FileSpreadsheet,
+  ChevronRight,
   Filter,
+  HelpCircle,
   Info,
   MapPin,
-  Megaphone,
-  Scale,
   Search,
-  ShieldAlert,
-  Store,
-  TrendingUp,
+  Sparkles,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ComposedChart,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { METRIC_CONFIG, RadarMap } from "./RadarMap";
+import { RadarMap } from "./RadarMap";
+import { buildBarrioNarrative } from "../lib/metrics-catalog";
+import type { CityBenchmarks } from "../lib/data";
 import type {
-  AuditoriaFemp80,
   BarrioIndicators,
-  DatasetAuditItem,
   MapMetricKey,
   ResumenObservatorio,
-  SeriesHistoricas,
 } from "../types/observatory";
 
 interface ObservatoryAppProps {
-  initialResumen: ResumenObservatorio;
-  initialSeries: SeriesHistoricas;
-  initialAuditoria: AuditoriaFemp80;
-  initialGeojson: GeoJSON.FeatureCollection | null;
+  initialTopBarrios: BarrioIndicators[];
+  initialAllBarrios: BarrioIndicators[];
+  benchmarks: CityBenchmarks;
   dataBaseUrl?: string;
 }
 
@@ -64,33 +43,75 @@ function getAlertBadgeStyle(nivel: BarrioIndicators["nivel_alerta"]) {
 function getProgressBarColor(score: number) {
   if (score >= 62) return "bg-red-600";
   if (score >= 46) return "bg-amber-600";
-  if (score >= 32) return "bg-blue-600";
+  if (score >= 32) return "bg-sky-600";
   return "bg-emerald-600";
 }
 
+const VECTOR_EXPLANATIONS: Record<
+  Exclude<MapMetricKey, "isvp">,
+  {
+    title: string;
+    weight: string;
+    whatItMeans: string;
+    avgKey: keyof Pick<
+      CityBenchmarks,
+      | "avgPresionTuristica"
+      | "avgDesplazamientoComercial"
+      | "avgBrechaEquidad"
+      | "avgVulnerabilidad"
+    >;
+  }
+> = {
+  presion_turistica: {
+    title: "Presión de Viviendas Turísticas",
+    weight: "Peso 35%",
+    whatItMeans:
+      "Mide la saturación de pisos turísticos por km², plazas de alojamiento y velocidad de nuevas licencias desde 2024.",
+    avgKey: "avgPresionTuristica",
+  },
+  desplazamiento_comercial: {
+    title: "Desplazamiento Comercial y Terrazas",
+    weight: "Peso 25%",
+    whatItMeans:
+      "Cruza la densidad de mesas y sillas de hostelería con la evolución del comercio local en el censo IAE.",
+    avgKey: "avgDesplazamientoComercial",
+  },
+  brecha_equidad_urbana: {
+    title: "Fricción en Convivencia y Avisos",
+    weight: "Peso 20%",
+    whatItMeans:
+      "Analiza la densidad de quejas vecinales por ruido nocturno, limpieza y desperfectos viarios (FEMP Nº 11).",
+    avgKey: "avgBrechaEquidad",
+  },
+  vulnerabilidad_residencial: {
+    title: "Vulnerabilidad Social Amplificada",
+    weight: "Peso 20%",
+    whatItMeans:
+      "Integra fragilidad socioeconómica y demográfica municipal amplificada por la presión habitacional del barrio.",
+    avgKey: "avgVulnerabilidad",
+  },
+};
+
 export function ObservatoryApp({
-  initialResumen,
-  initialSeries,
-  initialAuditoria,
-  initialGeojson,
+  initialTopBarrios,
+  initialAllBarrios,
+  benchmarks,
   dataBaseUrl = "/data/processed",
 }: ObservatoryAppProps) {
-  const [resumen, setResumen] = useState<ResumenObservatorio>(initialResumen);
-  const [series, setSeries] = useState<SeriesHistoricas>(initialSeries);
-  const [auditoria, setAuditoria] = useState<AuditoriaFemp80>(initialAuditoria);
-  const [geojson, setGeojson] = useState<GeoJSON.FeatureCollection | null>(
-    initialGeojson
-  );
+  const [allBarrios, setAllBarrios] =
+    useState<BarrioIndicators[]>(initialAllBarrios);
+  const [topBarrios, setTopBarrios] =
+    useState<BarrioIndicators[]>(initialTopBarrios);
+  const [geojson, setGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
 
   const [metric, setMetric] = useState<MapMetricKey>("isvp");
   const [selectedBarrioCode, setSelectedBarrioCode] = useState<string>(
-    initialResumen.topBarriosPresion[0]?.coddistbar ?? "021"
+    initialTopBarrios[0]?.coddistbar ?? "013"
   );
-  const [activeTab, setActiveTab] = useState<
-    "barrios" | "series" | "gobernanza"
-  >("barrios");
+  const [compareTargetCode, setCompareTargetCode] = useState<string>("MEDIA_VLC");
+  const [showVectorHelp, setShowVectorHelp] = useState<boolean>(false);
 
-  // Filtros de la tabla de barrios
+  // Filtros del explorador de los 88 barrios
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDistrito, setSelectedDistrito] = useState<string>("TODOS");
   const [selectedAlerta, setSelectedAlerta] = useState<string>("TODAS");
@@ -102,37 +123,36 @@ export function ObservatoryApp({
     | "avisos_totales"
     | "variacion_iae_pct"
   >("isvp");
+  const [showAllRows, setShowAllRows] = useState(false);
 
-  // Estado del generador de solicitudes formales Ley 1/2022
-  const [selectedAuditItem, setSelectedAuditItem] = useState<DatasetAuditItem>(
-    initialAuditoria.datasetsAuditados[2] ?? initialAuditoria.datasetsAuditados[0]!
-  );
-  const [copiedRequest, setCopiedRequest] = useState(false);
-
-  // Hidratación cliente opcional desde /data/processed o bucket Cloud Storage (PUBLIC_DATA_BASE_URL)
+  // Carga asíncrona del GeoJSON cartográfico y refresco opcional desde almacenamiento
   useEffect(() => {
     const base = dataBaseUrl.replace(/\/+$/, "");
     let cancelled = false;
 
-    async function refreshFromStorage() {
+    async function loadClientArtifacts() {
       try {
-        const [resR, serR, audR, geoR] = await Promise.all([
-          fetch(`${base}/resumen_observatorio.json`),
-          fetch(`${base}/series_historicas.json`),
-          fetch(`${base}/auditoria_femp80.json`),
+        const [geoR, resR] = await Promise.all([
           fetch(`${base}/barrios_vulnerabilidad.geojson`),
+          fetch(`${base}/resumen_observatorio.json`),
         ]);
         if (cancelled) return;
-        if (resR.ok) setResumen(await resR.json());
-        if (serR.ok) setSeries(await serR.json());
-        if (audR.ok) setAuditoria(await audR.json());
-        if (geoR.ok) setGeojson(await geoR.json());
+        if (geoR.ok) {
+          setGeojson(await geoR.json());
+        }
+        if (resR.ok) {
+          const data = (await resR.json()) as ResumenObservatorio;
+          if (Array.isArray(data.allBarrios) && data.allBarrios.length > 0) {
+            setAllBarrios(data.allBarrios);
+            setTopBarrios(data.topBarriosPresion);
+          }
+        }
       } catch {
-        // Mantiene los datos pre-renderizados si estamos offline
+        // Conserva datos iniciales pre-renderizados
       }
     }
 
-    refreshFromStorage();
+    loadClientArtifacts();
     return () => {
       cancelled = true;
     };
@@ -140,31 +160,36 @@ export function ObservatoryApp({
 
   const barriosByCode = useMemo(() => {
     const map = new Map<string, BarrioIndicators>();
-    for (const b of resumen.allBarrios) {
+    for (const b of allBarrios) {
       map.set(b.coddistbar, b);
     }
     return map;
-  }, [resumen.allBarrios]);
+  }, [allBarrios]);
 
   const selectedBarrio = useMemo(() => {
     return (
       barriosByCode.get(selectedBarrioCode) ??
-      resumen.topBarriosPresion[0] ??
-      resumen.allBarrios[0]
+      topBarrios[0] ??
+      allBarrios[0]
     );
-  }, [barriosByCode, selectedBarrioCode, resumen]);
+  }, [barriosByCode, selectedBarrioCode, topBarrios, allBarrios]);
+
+  const comparedBarrio = useMemo(() => {
+    if (compareTargetCode === "MEDIA_VLC") return null;
+    return barriosByCode.get(compareTargetCode) ?? null;
+  }, [barriosByCode, compareTargetCode]);
 
   const distritosList = useMemo(() => {
     const set = new Set<string>();
-    for (const b of resumen.allBarrios) {
+    for (const b of allBarrios) {
       set.add(b.distrito);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
-  }, [resumen.allBarrios]);
+  }, [allBarrios]);
 
   const filteredBarrios = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return resumen.allBarrios
+    return allBarrios
       .filter((b) => {
         if (selectedDistrito !== "TODOS" && b.distrito !== selectedDistrito) {
           return false;
@@ -186,181 +211,127 @@ export function ObservatoryApp({
         }
         return b[sortBy] - a[sortBy];
       });
-  }, [resumen.allBarrios, searchQuery, selectedDistrito, selectedAlerta, sortBy]);
+  }, [allBarrios, searchQuery, selectedDistrito, selectedAlerta, sortBy]);
 
-  const formalRequestTemplate = useMemo(() => {
-    return `ASUNTO: Solicitud de apertura / desagregación territorial de datos públicos (${selectedAuditItem.codigo} - ${selectedAuditItem.titulo})
+  const visibleBarrios = showAllRows
+    ? filteredBarrios
+    : filteredBarrios.slice(0, 24);
 
-A la atención del Servicio de Transparencia y Gobierno Abierto / Oficina de Estadística:
+  const selectedRank = useMemo(() => {
+    if (!selectedBarrio) return 1;
+    const sorted = [...allBarrios].sort((a, b) => b.isvp - a.isvp);
+    const idx = sorted.findIndex((x) => x.coddistbar === selectedBarrio.coddistbar);
+    return idx >= 0 ? idx + 1 : 1;
+  }, [allBarrios, selectedBarrio]);
 
-Al amparo de la Ley 1/2022, de 13 de abril, de Transparencia y Buen Gobierno de la Comunitat Valenciana, y en alineación con la Guía de los 80 Conjuntos de Datos Esenciales de la FEMP, desde el observatorio ciudadano abierto "Radar de Presión Residencial, Desplazamiento Comercial y Equidad de Barrio" (https://github.com/turbica/radar-vivienda) hemos auditado el conjunto de datos:
+  const narrativeText = useMemo(() => {
+    if (!selectedBarrio) return "";
+    return buildBarrioNarrative(
+      selectedBarrio,
+      benchmarks.avgIsvp,
+      benchmarks.avgDensidadVutKm2
+    );
+  }, [selectedBarrio, benchmarks]);
 
-- Identificador en catálogo CKAN: ${selectedAuditItem.packageId}
-- Estado actual verificado: ${selectedAuditItem.estadoApertura} (${selectedAuditItem.desagregacionEspacial})
-- Limitación técnica detectada: ${selectedAuditItem.incidenciaDetectada}
-
-SOLICITAMOS:
-${selectedAuditItem.accionGobernanza}
-
-En formato abierto, reutilizable y legible por máquina (CSV / GeoJSON / Parquet) a través de la API CKAN municipal/autonómica (/api/3/action), preservando en todo momento la disociación de datos personales conforme al RGPD.
-
-En València, a ${new Date().toLocaleDateString("es-ES")}.`;
-  }, [selectedAuditItem]);
-
-  const handleCopyFormalRequest = async () => {
-    try {
-      await navigator.clipboard.writeText(formalRequestTemplate);
-      setCopiedRequest(true);
-      setTimeout(() => setCopiedRequest(false), 2200);
-    } catch {
-      // Fallback silencioso
+  const handleInspectBarrio = (coddistbar: string, scrollToMap = false) => {
+    setSelectedBarrioCode(coddistbar);
+    if (scrollToMap && typeof window !== "undefined") {
+      const el = document.getElementById("estacion-cartografica");
+      el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   };
 
-  const baseDownloadUrl = dataBaseUrl.replace(/\/+$/, "");
-
   return (
-    <div className="space-y-8">
-      {/* Barra superior de trazabilidad y descargas abiertas */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 text-xs text-slate-700">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-md bg-blue-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-white">
-            <Database className="h-3 w-3" aria-hidden="true" />
-            SNAPSHOT ACTIVO
-          </span>
-          <span className="font-mono font-semibold text-slate-900">
-            {resumen.latestSnapshot.fileName}
-          </span>
-          <span className="text-slate-500">·</span>
-          <span title="Hash criptográfico SHA-256 de la captura en data/raw/">
-            SHA-256:{" "}
-            <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-800">
-              {resumen.latestSnapshot.sha256.slice(0, 16)}…
-            </code>
-          </span>
-          <span className="text-slate-500">·</span>
-          <span>
-            Series acumuladas:{" "}
-            <strong className="font-mono text-slate-900">
-              {resumen.kpis.snapshotsAcumulados}
-            </strong>
-          </span>
+    <div className="space-y-10">
+      {/* Barra rápida de selección de barrio ("¿Qué ocurre en tu barrio?") */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-md bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-900">
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                Consulta directa por barrio
+              </span>
+              <span className="text-xs text-slate-600">
+                Selecciona cualquiera de los 88 barrios oficiales de València
+              </span>
+            </div>
+            <label
+              htmlFor="quick-barrio-select"
+              className="block text-sm font-bold text-slate-900"
+            >
+              ¿Qué barrio quieres diagnosticar hoy?
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <select
+              id="quick-barrio-select"
+              value={selectedBarrio?.coddistbar ?? ""}
+              onChange={(e) => setSelectedBarrioCode(e.target.value)}
+              className="min-h-[42px] rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm font-semibold text-slate-900 shadow-2xs focus:border-sky-700 focus:bg-white"
+            >
+              {allBarrios
+                .slice()
+                .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+                .map((b) => (
+                  <option key={b.coddistbar} value={b.coddistbar}>
+                    {b.nombre} ({b.distrito}) — ISVP {b.isvp.toFixed(1)} [{b.nivel_alerta}]
+                  </option>
+                ))}
+            </select>
+
+            <a
+              href="/metodologia"
+              className="interactive-btn inline-flex min-h-[42px] items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-800 hover:bg-slate-200"
+            >
+              <BookOpen className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />
+              <span>Guía de métricas</span>
+            </a>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-medium text-slate-600">
-            Datos procesados (AGPL-3.0):
+        {/* Píldoras de acceso rápido a los barrios con mayor tensión */}
+        <div className="mt-3.5 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3">
+          <span className="mr-1 text-[11px] font-bold tracking-wider text-slate-600 uppercase">
+            Focos de mayor presión:
           </span>
-          <a
-            href={`${baseDownloadUrl}/barrios_vulnerabilidad.geojson`}
-            download="barrios_vulnerabilidad.geojson"
-            className="interactive-btn inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-mono text-[11px] font-medium text-slate-800 hover:bg-slate-100"
-          >
-            <Download className="h-3 w-3 text-blue-700" aria-hidden="true" />
-            GeoJSON
-          </a>
-          <a
-            href={`${baseDownloadUrl}/viviendas_turisticas_valencia.parquet`}
-            download="viviendas_turisticas_valencia.parquet"
-            className="interactive-btn inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-mono text-[11px] font-medium text-slate-800 hover:bg-slate-100"
-          >
-            <FileSpreadsheet className="h-3 w-3 text-blue-700" aria-hidden="true" />
-            Parquet
-          </a>
-          <a
-            href={`${baseDownloadUrl}/resumen_observatorio.json`}
-            download="resumen_observatorio.json"
-            className="interactive-btn inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-mono text-[11px] font-medium text-slate-800 hover:bg-slate-100"
-          >
-            <Download className="h-3 w-3 text-blue-700" aria-hidden="true" />
-            JSON
-          </a>
+          {topBarrios.slice(0, 7).map((b) => {
+            const isSelected = selectedBarrio?.coddistbar === b.coddistbar;
+            return (
+              <button
+                key={b.coddistbar}
+                type="button"
+                onClick={() => setSelectedBarrioCode(b.coddistbar)}
+                className={`interactive-btn inline-flex min-h-[34px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                  isSelected
+                    ? "border-slate-900 bg-slate-900 text-white shadow-2xs"
+                    : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
+                }`}
+              >
+                <span>{b.nombre}</span>
+                <span
+                  className={`rounded px-1 py-0.2 font-mono text-[10px] ${
+                    isSelected
+                      ? "bg-red-500/30 text-red-100"
+                      : "bg-red-100 text-red-900"
+                  }`}
+                >
+                  {b.isvp.toFixed(1)}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Tarjetas KPI de Diagnóstico Urbano */}
+      {/* ESTACIÓN CARTOGRÁFICA Y FICHA DE RADIOGRAFÍA BARRIAL */}
       <section
-        aria-label="Indicadores clave del observatorio"
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        id="estacion-cartografica"
+        aria-label="Mapa interactivo y ficha de diagnóstico del barrio seleccionado"
+        className="grid gap-6 lg:grid-cols-12"
       >
-        <div className="interactive-card-hover rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
-              Viviendas Turísticas (VUT)
-            </span>
-            <Building2 className="h-4 w-4 text-blue-700" aria-hidden="true" />
-          </div>
-          <p className="mt-2 font-mono text-3xl font-bold text-slate-900">
-            {resumen.kpis.vutActivasValencia.toLocaleString("es-ES")}
-          </p>
-          <p className="mt-1 text-xs text-slate-600">
-            <strong className="font-mono text-slate-900">
-              {resumen.kpis.plazasTuristicasValencia.toLocaleString("es-ES")}
-            </strong>{" "}
-            plazas en València (
-            <span className="font-mono font-semibold text-amber-800">
-              +{resumen.kpis.altasRecientes2024a2026.toLocaleString("es-ES")}
-            </span>{" "}
-            desde 2024)
-          </p>
-        </div>
-
-        <div className="interactive-card-hover rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
-              Barrios en Alerta (ISVP)
-            </span>
-            <ShieldAlert className="h-4 w-4 text-red-600" aria-hidden="true" />
-          </div>
-          <p className="mt-2 font-mono text-3xl font-bold text-red-700">
-            {resumen.kpis.barriosAlertaCriticaOAlta}{" "}
-            <span className="text-lg font-normal text-slate-500">
-              / {resumen.kpis.barriosAnalizados}
-            </span>
-          </p>
-          <p className="mt-1 text-xs text-slate-600">
-            Barrios con presión residencial y desplazamiento comercial alto o crítico
-          </p>
-        </div>
-
-        <div className="interactive-card-hover rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
-              Avisos y Quejas (FEMP Nº 11)
-            </span>
-            <Megaphone className="h-4 w-4 text-amber-600" aria-hidden="true" />
-          </div>
-          <p className="mt-2 font-mono text-3xl font-bold text-slate-900">
-            {resumen.kpis.avisosCiudadanosAnalizados.toLocaleString("es-ES")}
-          </p>
-          <p className="mt-1 text-xs text-slate-600">
-            Comunicaciones vecinales cruzadas por ruido, limpieza y deterioro viario
-          </p>
-        </div>
-
-        <div className="interactive-card-hover rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
-              Gasto y Ayudas (FEMP 12 y 40)
-            </span>
-            <Scale className="h-4 w-4 text-emerald-700" aria-hidden="true" />
-          </div>
-          <p className="mt-2 font-mono text-3xl font-bold text-slate-900">
-            {(resumen.kpis.gastoBienesServiciosEur / 1_000_000).toFixed(1)} M€
-          </p>
-          <p className="mt-1 text-xs text-slate-600">
-            Gasto corriente en bienes y servicios ·{" "}
-            <strong className="font-mono text-slate-800">
-              {(resumen.kpis.subvencionesNominativasEur / 1_000_000).toFixed(1)} M€
-            </strong>{" "}
-            en subvenciones
-          </p>
-        </div>
-      </section>
-
-      {/* Bloque Principal: Mapa Interactivo + Ficha de Diagnóstico del Barrio Seleccionado */}
-      <section className="grid gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-8">
+        <div className="lg:col-span-7 xl:col-span-8">
           <RadarMap
             geojson={geojson}
             metric={metric}
@@ -371,29 +342,33 @@ En València, a ${new Date().toLocaleDateString("es-ES")}.`;
           />
         </div>
 
-        {/* Panel lateral de radiografía del barrio seleccionado */}
+        {/* Ficha de Radiografía Ciudadana del Barrio Seleccionado */}
         <aside
-          aria-label="Diagnóstico del barrio seleccionado"
-          className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-xs lg:col-span-4"
+          aria-label="Radiografía detallada del barrio seleccionado"
+          className="flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs lg:col-span-5 xl:col-span-4"
         >
           {selectedBarrio && (
             <div className="space-y-4">
-              <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+              {/* Cabecera del barrio */}
+              <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3.5">
                 <div>
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-800">
-                    <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-sky-800">
                     <span className="font-mono">
-                      Barrio #{selectedBarrio.coddistbar}
+                      Cód. {selectedBarrio.coddistbar}
                     </span>
-                    <span>·</span>
+                    <span aria-hidden="true">·</span>
                     <span>{selectedBarrio.distrito}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">
+                      Puesto #{selectedRank} de 88
+                    </span>
                   </div>
-                  <h2 className="mt-1 text-xl font-bold text-slate-900">
+                  <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900">
                     {selectedBarrio.nombre}
                   </h2>
                 </div>
                 <span
-                  className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${getAlertBadgeStyle(
+                  className={`shrink-0 rounded-full border px-3 py-1 text-xs font-bold ${getAlertBadgeStyle(
                     selectedBarrio.nivel_alerta
                   )}`}
                 >
@@ -401,15 +376,39 @@ En València, a ${new Date().toLocaleDateString("es-ES")}.`;
                 </span>
               </div>
 
-              {/* Puntuación sintética ISVP */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs font-semibold text-slate-700">
-                    Índice Sintético ISVP
+              {/* Resumen interpretativo en lenguaje claro */}
+              <div className="rounded-xl border border-sky-200/80 bg-sky-50/70 p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-950">
+                    <Sparkles className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />
+                    Interpretación en lenguaje claro
                   </span>
-                  <span className="font-mono text-2xl font-bold text-slate-900">
+                  <a
+                    href="/metodologia#isvp"
+                    className="text-[11px] font-bold text-sky-800 underline hover:text-slate-950"
+                  >
+                    Ver fórmula
+                  </a>
+                </div>
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-800">
+                  {narrativeText}
+                </p>
+              </div>
+
+              {/* Termómetro principal ISVP + Comparador frente a Media o Barrio */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
+                <div className="flex items-baseline justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">
+                      Índice Sintético ISVP
+                    </span>
+                    <span className="ml-1.5 text-[11px] text-slate-600">
+                      (Media ciudad: {benchmarks.avgIsvp})
+                    </span>
+                  </div>
+                  <span className="font-mono text-2xl font-extrabold text-slate-900">
                     {selectedBarrio.isvp.toFixed(1)}{" "}
-                    <span className="text-xs font-normal text-slate-500">/ 100</span>
+                    <span className="text-xs font-normal text-slate-600">/ 100</span>
                   </span>
                 </div>
                 <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
@@ -420,20 +419,52 @@ En València, a ${new Date().toLocaleDateString("es-ES")}.`;
                     style={{ width: `${Math.min(100, selectedBarrio.isvp)}%` }}
                   />
                 </div>
-                <p className="mt-1.5 text-[11px] text-slate-600">
-                  Clasificación estadística municipal base:{" "}
-                  <strong className="text-slate-800">
-                    {selectedBarrio.etiqueta_vulnerabilidad_municipal} (
-                    {selectedBarrio.ind_vulnerabilidad_municipal.toFixed(1)})
-                  </strong>
-                </p>
+
+                {/* Selector de comparación directa */}
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/80 pt-2.5 text-xs">
+                  <label
+                    htmlFor="compare-barrio-select"
+                    className="inline-flex items-center gap-1 font-semibold text-slate-700"
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />
+                    <span>Comparar con:</span>
+                  </label>
+                  <select
+                    id="compare-barrio-select"
+                    value={compareTargetCode}
+                    onChange={(e) => setCompareTargetCode(e.target.value)}
+                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800"
+                  >
+                    <option value="MEDIA_VLC">
+                      Media de València (88 barrios — {benchmarks.avgIsvp} ptos)
+                    </option>
+                    {allBarrios
+                      .slice()
+                      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+                      .map((b) => (
+                        <option key={b.coddistbar} value={b.coddistbar}>
+                          {b.nombre} (ISVP {b.isvp.toFixed(1)})
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
-              {/* Desglose de los 4 vectores del metabolismo barrial */}
-              <div className="space-y-2.5">
-                <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
-                  Vectores de Presión y Equidad (0–100)
-                </p>
+              {/* Desglose de los 4 vectores del metabolismo barrial con ayuda desplegable */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold tracking-wider text-slate-600 uppercase">
+                    Los 4 Vectores del Barrio (clic para ver en mapa)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowVectorHelp(!showVectorHelp)}
+                    className="interactive-btn inline-flex items-center gap-1 text-xs font-semibold text-sky-800 hover:text-slate-950"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>{showVectorHelp ? "Ocultar ayuda" : "¿Qué miden?"}</span>
+                  </button>
+                </div>
 
                 {(
                   [
@@ -447,680 +478,447 @@ En València, a ${new Date().toLocaleDateString("es-ES")}.`;
                       "vulnerabilidad_residencial",
                       selectedBarrio.vulnerabilidad_residencial,
                     ],
-                  ] as Array<[MapMetricKey, number]>
-                ).map(([key, val]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setMetric(key)}
-                    className={`interactive-btn w-full rounded-lg border p-2 text-left ${
-                      metric === key
-                        ? "border-blue-600 bg-blue-50/50"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-800">
-                        {METRIC_CONFIG[key].shortLabel}
-                      </span>
-                      <span className="font-mono font-bold text-slate-900">
-                        {val.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className={`h-full rounded-full ${getProgressBarColor(val)}`}
-                        style={{ width: `${Math.min(100, val)}%` }}
-                      />
-                    </div>
-                  </button>
-                ))}
+                  ] as Array<[Exclude<MapMetricKey, "isvp">, number]>
+                ).map(([key, val]) => {
+                  const meta = VECTOR_EXPLANATIONS[key];
+                  const referenceVal = comparedBarrio
+                    ? comparedBarrio[key]
+                    : benchmarks[meta.avgKey];
+                  const referenceLabel = comparedBarrio
+                    ? comparedBarrio.nombre
+                    : "Media VLC";
+                  const delta = val - referenceVal;
+
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setMetric(key)}
+                      className={`interactive-btn w-full rounded-xl border p-2.5 text-left ${
+                        metric === key
+                          ? "border-sky-700 bg-sky-50/50 ring-1 ring-sky-700/30"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900">
+                            {meta.title}
+                          </span>
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600">
+                            {meta.weight}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="font-extrabold text-slate-900">
+                            {val.toFixed(1)}
+                          </span>
+                          <span
+                            className={`text-[10px] font-semibold ${
+                              delta > 2
+                                ? "text-red-700"
+                                : delta < -2
+                                  ? "text-emerald-700"
+                                  : "text-slate-600"
+                            }`}
+                          >
+                            ({delta >= 0 ? "+" : ""}
+                            {delta.toFixed(1)} vs. {referenceLabel})
+                          </span>
+                        </div>
+                      </div>
+
+                      {showVectorHelp && (
+                        <p className="mt-1 text-[11px] leading-snug text-slate-600">
+                          {meta.whatItMeans}
+                        </p>
+                      )}
+
+                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className={`h-full rounded-full ${getProgressBarColor(val)}`}
+                          style={{ width: `${Math.min(100, val)}%` }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Métricas empíricas cruzadas del barrio */}
+              {/* Indicadores empíricos directos del barrio */}
               <div className="grid grid-cols-2 gap-2.5 border-t border-slate-100 pt-3 text-xs">
-                <div className="rounded-lg bg-slate-50 p-2.5">
-                  <span className="text-[11px] text-slate-500">VUT Vigentes GVA</span>
-                  <p className="mt-0.5 font-mono text-base font-bold text-slate-900">
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5">
+                  <span className="text-[11px] font-semibold text-slate-600">
+                    Viviendas Turísticas (GVA)
+                  </span>
+                  <p className="mt-0.5 font-mono text-base font-extrabold text-slate-900">
                     {selectedBarrio.vut_activas}{" "}
                     <span className="text-[11px] font-normal text-slate-600">
                       ({selectedBarrio.plazas_vut} plazas)
                     </span>
                   </p>
-                  <span className="font-mono text-[11px] text-amber-800">
-                    {selectedBarrio.densidad_vut_km2} VUT/km²
+                  <span className="font-mono text-[11px] font-semibold text-amber-800">
+                    {selectedBarrio.densidad_vut_km2} VUT/km² (+
+                    {selectedBarrio.vut_altas_recientes} desde 2024)
                   </span>
                 </div>
 
-                <div className="rounded-lg bg-slate-50 p-2.5">
-                  <span className="text-[11px] text-slate-500">
-                    Censo IAE / Terrazas
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5">
+                  <span className="text-[11px] font-semibold text-slate-600">
+                    Terrazas y Comercio IAE
                   </span>
-                  <p className="mt-0.5 font-mono text-base font-bold text-slate-900">
+                  <p className="mt-0.5 font-mono text-base font-extrabold text-slate-900">
                     {selectedBarrio.recibos_terrazas}{" "}
                     <span className="text-[11px] font-normal text-slate-600">
                       terrazas
                     </span>
                   </p>
                   <span className="font-mono text-[11px] text-slate-700">
-                    IAE: {selectedBarrio.recibos_iae} (
-                    {selectedBarrio.variacion_iae_pct >= 0 ? "+" : ""}
-                    {selectedBarrio.variacion_iae_pct}%)
+                    IAE: {selectedBarrio.recibos_iae} recibos (
+                    <strong
+                      className={
+                        selectedBarrio.variacion_iae_pct < 0
+                          ? "text-red-700"
+                          : "text-emerald-700"
+                      }
+                    >
+                      {selectedBarrio.variacion_iae_pct >= 0 ? "+" : ""}
+                      {selectedBarrio.variacion_iae_pct}%
+                    </strong>
+                    )
                   </span>
                 </div>
 
-                <div className="rounded-lg bg-slate-50 p-2.5">
-                  <span className="text-[11px] text-slate-500">
-                    Avisos Ruido y Ocio
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5">
+                  <span className="text-[11px] font-semibold text-slate-600">
+                    Quejas Ruido y Convivencia
                   </span>
-                  <p className="mt-0.5 font-mono text-base font-bold text-slate-900">
+                  <p className="mt-0.5 font-mono text-base font-extrabold text-slate-900">
                     {selectedBarrio.avisos_ruido_convivencia.toLocaleString("es-ES")}
                   </p>
                   <span className="text-[11px] text-slate-600">
-                    de {selectedBarrio.avisos_totales.toLocaleString("es-ES")} quejas
+                    de {selectedBarrio.avisos_totales.toLocaleString("es-ES")} avisos totales
                   </span>
                 </div>
 
-                <div className="rounded-lg bg-slate-50 p-2.5">
-                  <span className="text-[11px] text-slate-500">
-                    Deterioro y Limpieza
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5">
+                  <span className="text-[11px] font-semibold text-slate-600">
+                    Deterioro Viario / Vulnerab.
                   </span>
-                  <p className="mt-0.5 font-mono text-base font-bold text-slate-900">
-                    {selectedBarrio.avisos_deterioro_viario.toLocaleString("es-ES")}
+                  <p className="mt-0.5 font-mono text-base font-extrabold text-slate-900">
+                    {selectedBarrio.avisos_deterioro_viario.toLocaleString("es-ES")}{" "}
+                    <span className="text-[11px] font-normal text-slate-600">
+                      avisos vía
+                    </span>
                   </p>
-                  <span className="font-mono text-[11px] text-slate-600">
-                    Sup: {selectedBarrio.area_km2} km²
+                  <span className="text-[11px] font-medium text-slate-700">
+                    Base mun.: {selectedBarrio.etiqueta_vulnerabilidad_municipal}
                   </span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Selector rápido de barrios críticos */}
           <div className="mt-4 border-t border-slate-100 pt-3">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase">
-              Top 5 Barrios con Mayor Presión (clic para inspeccionar):
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {resumen.topBarriosPresion.slice(0, 5).map((b) => (
-                <button
-                  key={b.coddistbar}
-                  type="button"
-                  onClick={() => setSelectedBarrioCode(b.coddistbar)}
-                  className={`interactive-btn rounded-md border px-2 py-1 text-xs font-medium ${
-                    selectedBarrio?.coddistbar === b.coddistbar
-                      ? "border-blue-800 bg-blue-800 text-white"
-                      : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
-                  }`}
-                >
-                  {b.nombre}{" "}
-                  <span className="font-mono text-[11px] opacity-85">
-                    ({b.isvp.toFixed(0)})
-                  </span>
-                </button>
-              ))}
-            </div>
+            <a
+              href="/metodologia#glosario-metricas"
+              className="interactive-btn flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-800 hover:bg-slate-100"
+            >
+              <span className="flex items-center gap-2">
+                <Info className="h-4 w-4 text-sky-700" aria-hidden="true" />
+                <span>Explicación detallada de cada indicador y fuente</span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-slate-500" aria-hidden="true" />
+            </a>
           </div>
         </aside>
       </section>
 
-      {/* Pestañas de Análisis Profundo: Ranking 88 Barrios | Series Temporales | Gobernanza FEMP 80 */}
-      <section className="rounded-xl border border-slate-200 bg-white shadow-xs">
-        <div
-          className="flex flex-wrap border-b border-slate-200 bg-slate-50/70 px-4 pt-3"
-          role="tablist"
-          aria-label="Secciones de análisis del observatorio"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "barrios"}
-            onClick={() => setActiveTab("barrios")}
-            className={`interactive-btn flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold ${
-              activeTab === "barrios"
-                ? "border-blue-800 text-blue-900"
-                : "border-transparent text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Store className="h-4 w-4" aria-hidden="true" />
-            <span>Explorador de Barrios ({resumen.allBarrios.length})</span>
-          </button>
+      {/* EXPLORADOR COMPLETO DE LOS 88 BARRIOS (Tabla en Escritorio + Tarjetas en Móvil) */}
+      <section
+        id="explorador-barrios"
+        aria-labelledby="heading-explorador-barrios"
+        className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs sm:p-6"
+      >
+        <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <span className="text-xs font-bold tracking-wider text-sky-800 uppercase">
+              Catálogo Territorial Completo · 88 Barrios Oficiales
+            </span>
+            <h2
+              id="heading-explorador-barrios"
+              className="mt-1 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl"
+            >
+              Explorador y Ranking Comparativo por Barrios
+            </h2>
+            <p className="mt-1 text-xs text-slate-600 sm:text-sm">
+              Filtra por distrito o nivel de alerta y haz clic en cualquier barrio
+              para centrar el mapa y abrir su ficha de diagnóstico.
+            </p>
+          </div>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "series"}
-            onClick={() => setActiveTab("series")}
-            className={`interactive-btn flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold ${
-              activeTab === "series"
-                ? "border-blue-800 text-blue-900"
-                : "border-transparent text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <TrendingUp className="h-4 w-4" aria-hidden="true" />
-            <span>Series Históricas, Distritos y Códigos Postales</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "gobernanza"}
-            onClick={() => setActiveTab("gobernanza")}
-            className={`interactive-btn flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold ${
-              activeTab === "gobernanza"
-                ? "border-blue-800 text-blue-900"
-                : "border-transparent text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Scale className="h-4 w-4" aria-hidden="true" />
-            <span>Auditoría FEMP 80 y Gobernanza (Ley 1/2022)</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-lg bg-red-50 px-2.5 py-1 font-semibold text-red-900 border border-red-200">
+              Crítica: <strong>{benchmarks.countsByAlert.Crítica}</strong>
+            </span>
+            <span className="rounded-lg bg-amber-50 px-2.5 py-1 font-semibold text-amber-900 border border-amber-200">
+              Alta: <strong>{benchmarks.countsByAlert.Alta}</strong>
+            </span>
+            <span className="rounded-lg bg-sky-50 px-2.5 py-1 font-semibold text-sky-900 border border-sky-200">
+              Moderada: <strong>{benchmarks.countsByAlert.Moderada}</strong>
+            </span>
+            <span className="rounded-lg bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-900 border border-emerald-200">
+              Baja: <strong>{benchmarks.countsByAlert.Baja}</strong>
+            </span>
+          </div>
         </div>
 
-        <div className="p-6">
-          {/* TAB 1: EXPLORADOR Y RANKING DE LOS 88 BARRIOS */}
-          {activeTab === "barrios" && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="relative min-w-[240px] flex-1">
-                  <Search
-                    className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-slate-400"
-                    aria-hidden="true"
-                  />
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar barrio, distrito o código (ej. Russafa, Cabanyal, 021)..."
-                    aria-label="Buscar barrio, distrito o código"
-                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pr-3 pl-9 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-700 focus:outline-none"
-                  />
-                </div>
+        {/* Controles de búsqueda, filtro y ordenación */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="relative min-w-[240px] flex-1">
+            <Search
+              className="pointer-events-none absolute top-3 left-3.5 h-4 w-4 text-slate-500"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar barrio, distrito o código (ej. Russafa, Cabanyal, Benimaclet, 021)..."
+              aria-label="Buscar barrio, distrito o código"
+              className="min-h-[42px] w-full rounded-xl border border-slate-300 bg-slate-50/70 py-2 pr-3 pl-10 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-700 focus:bg-white"
+            />
+          </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                    <Filter className="h-3.5 w-3.5" aria-hidden="true" />
-                    <label htmlFor="filter-distrito">Distrito:</label>
-                  </div>
-                  <select
-                    id="filter-distrito"
-                    value={selectedDistrito}
-                    onChange={(e) => setSelectedDistrito(e.target.value)}
-                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-700 focus:outline-none"
-                  >
-                    <option value="TODOS">Todos los distritos (19)</option>
-                    {distritosList.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-
-                  <label htmlFor="filter-alerta" className="sr-only">
-                    Nivel de alerta
-                  </label>
-                  <select
-                    id="filter-alerta"
-                    value={selectedAlerta}
-                    onChange={(e) => setSelectedAlerta(e.target.value)}
-                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-700 focus:outline-none"
-                  >
-                    <option value="TODAS">Todas las alertas</option>
-                    <option value="Crítica">Alerta Crítica</option>
-                    <option value="Alta">Alerta Alta</option>
-                    <option value="Moderada">Alerta Moderada</option>
-                    <option value="Baja">Alerta Baja</option>
-                  </select>
-
-                  <label htmlFor="sort-barrios" className="text-xs font-medium text-slate-600">
-                    Ordenar por:
-                  </label>
-                  <select
-                    id="sort-barrios"
-                    value={sortBy}
-                    onChange={(e) =>
-                      setSortBy(e.target.value as typeof sortBy)
-                    }
-                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-700 focus:outline-none"
-                  >
-                    <option value="isvp">Índice Global ISVP (Mayor a menor)</option>
-                    <option value="vut_activas">Viviendas Turísticas (VUT)</option>
-                    <option value="densidad_vut_km2">Densidad VUT / km²</option>
-                    <option value="recibos_terrazas">Terrazas hosteleras</option>
-                    <option value="avisos_totales">Avisos y quejas vecinales</option>
-                    <option value="variacion_iae_pct">Caída actividad IAE (%)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold tracking-wider text-slate-600 uppercase">
-                      <th className="px-3 py-3">Cód.</th>
-                      <th className="px-3 py-3">Barrio</th>
-                      <th className="px-3 py-3">Distrito</th>
-                      <th className="px-3 py-3 text-right">ISVP</th>
-                      <th className="px-3 py-3">Nivel</th>
-                      <th className="px-3 py-3 text-right">VUT (Plazas)</th>
-                      <th className="px-3 py-3 text-right">VUT / km²</th>
-                      <th className="px-3 py-3 text-right">Terrazas</th>
-                      <th className="px-3 py-3 text-right">Recibos IAE (Var.)</th>
-                      <th className="px-3 py-3 text-right">Avisos (Ruido / Vía)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {filteredBarrios.slice(0, 45).map((b) => {
-                      const isSelected = selectedBarrio?.coddistbar === b.coddistbar;
-                      return (
-                        <tr
-                          key={b.coddistbar}
-                          onClick={() => setSelectedBarrioCode(b.coddistbar)}
-                          className={`cursor-pointer transition-colors duration-150 ${
-                            isSelected
-                              ? "bg-blue-50/90 font-medium"
-                              : "hover:bg-slate-50"
-                          }`}
-                        >
-                          <td className="px-3 py-2.5 font-mono text-slate-500">
-                            {b.coddistbar}
-                          </td>
-                          <td className="px-3 py-2.5 font-semibold text-slate-900">
-                            {b.nombre}
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-600">{b.distrito}</td>
-                          <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-900">
-                            {b.isvp.toFixed(1)}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span
-                              className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getAlertBadgeStyle(
-                                b.nivel_alerta
-                              )}`}
-                            >
-                              {b.nivel_alerta}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-slate-800">
-                            <strong>{b.vut_activas}</strong>{" "}
-                            <span className="text-slate-500">({b.plazas_vut})</span>
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-slate-800">
-                            {b.densidad_vut_km2.toFixed(1)}
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-slate-800">
-                            {b.recibos_terrazas}
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono">
-                            <span className="text-slate-800">{b.recibos_iae}</span>{" "}
-                            <span
-                              className={
-                                b.variacion_iae_pct < 0
-                                  ? "font-semibold text-red-700"
-                                  : "text-emerald-700"
-                              }
-                            >
-                              ({b.variacion_iae_pct >= 0 ? "+" : ""}
-                              {b.variacion_iae_pct}%)
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-slate-700">
-                            <strong>{b.avisos_totales.toLocaleString("es-ES")}</strong>{" "}
-                            <span className="text-[11px] text-slate-500">
-                              ({b.avisos_ruido_convivencia} / {b.avisos_deterioro_viario})
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-xs text-slate-500">
-                Mostrando {Math.min(45, filteredBarrios.length)} de{" "}
-                {filteredBarrios.length} barrios filtrados. Haz clic en cualquier fila
-                para centrar el mapa e inspeccionar el detalle del barrio.
-              </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+              <Filter className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />
+              <label htmlFor="filter-distrito">Distrito:</label>
             </div>
-          )}
+            <select
+              id="filter-distrito"
+              value={selectedDistrito}
+              onChange={(e) => setSelectedDistrito(e.target.value)}
+              className="min-h-[40px] rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800"
+            >
+              <option value="TODOS">Todos los distritos (19)</option>
+              {distritosList.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
 
-          {/* TAB 2: SERIES HISTÓRICAS, DISTRITOS Y CÓDIGOS POSTALES */}
-          {activeTab === "series" && (
-            <div className="space-y-8">
-              <div className="grid gap-6 lg:grid-cols-2">
-                {/* Gráfico 1: Evolución anual de licencias VUT en València (2015-2026) */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Velocidad de Concentración: Altas Anuales y Stock Vigente en València (2015–2026)
-                  </h3>
-                  <p className="mt-0.5 text-xs text-slate-600">
-                    Reconstrucción longitudinal a partir de las fechas de alta (`fecha_alta`) del registro vivo `tur-gestur-vt` de la GVA.
-                  </p>
-                  <div className="mt-4 h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={series.serieAnualAltas}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis
-                          dataKey="anio"
-                          tick={{ fontSize: 11, fill: "#475569" }}
-                        />
-                        <YAxis
-                          yAxisId="left"
-                          tick={{ fontSize: 11, fill: "#1e40af" }}
-                        />
-                        <YAxis
-                          yAxisId="right"
-                          orientation="right"
-                          tick={{ fontSize: 11, fill: "#d97706" }}
-                        />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: "12px" }} />
-                        <Bar
-                          yAxisId="left"
-                          dataKey="nuevas_licencias"
-                          name="Nuevas altas anuales (VUT)"
-                          fill="#3b82f6"
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <Line
-                          yAxisId="right"
-                          type="monotone"
-                          dataKey="stock_acumulado_vigente"
-                          name="Stock acumulado vigente"
-                          stroke="#d97706"
-                          strokeWidth={2.5}
-                          dot={{ r: 3 }}
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
+            <label htmlFor="filter-alerta" className="sr-only">
+              Nivel de alerta
+            </label>
+            <select
+              id="filter-alerta"
+              value={selectedAlerta}
+              onChange={(e) => setSelectedAlerta(e.target.value)}
+              className="min-h-[40px] rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800"
+            >
+              <option value="TODAS">Todas las alertas</option>
+              <option value="Crítica">Alerta Crítica (≥ 62)</option>
+              <option value="Alta">Alerta Alta (46–61,9)</option>
+              <option value="Moderada">Alerta Moderada (32–45,9)</option>
+              <option value="Baja">Alerta Baja (&lt; 32)</option>
+            </select>
+
+            <label
+              htmlFor="sort-barrios"
+              className="text-xs font-semibold text-slate-700"
+            >
+              Ordenar por:
+            </label>
+            <select
+              id="sort-barrios"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="min-h-[40px] rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800"
+            >
+              <option value="isvp">Índice Global ISVP (Mayor a menor)</option>
+              <option value="vut_activas">Viviendas Turísticas (VUT)</option>
+              <option value="densidad_vut_km2">Densidad VUT / km²</option>
+              <option value="recibos_terrazas">Terrazas hosteleras</option>
+              <option value="avisos_totales">Avisos y quejas vecinales</option>
+              <option value="variacion_iae_pct">Caída actividad IAE (%)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* VISTA MÓVIL: Tarjetas escaneables sin scroll horizontal forzado (< md) */}
+        <div className="mt-4 grid gap-3 md:hidden">
+          {visibleBarrios.map((b) => {
+            const isSelected = selectedBarrio?.coddistbar === b.coddistbar;
+            return (
+              <div
+                key={b.coddistbar}
+                className={`rounded-xl border p-4 transition-colors ${
+                  isSelected
+                    ? "border-sky-700 bg-sky-50/50"
+                    : "border-slate-200 bg-white"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="font-mono text-[11px] font-semibold text-slate-600">
+                      #{b.coddistbar} · {b.distrito}
+                    </span>
+                    <h3 className="text-base font-extrabold text-slate-900">
+                      {b.nombre}
+                    </h3>
+                  </div>
+                  <span
+                    className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${getAlertBadgeStyle(
+                      b.nivel_alerta
+                    )}`}
+                  >
+                    ISVP {b.isvp.toFixed(1)} · {b.nivel_alerta}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-2.5 text-xs">
+                  <div>
+                    <span className="block text-[10px] text-slate-600">
+                      VUT (Plazas)
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {b.vut_activas} ({b.plazas_vut})
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-600">
+                      Densidad
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {b.densidad_vut_km2.toFixed(1)}/km²
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-600">
+                      Terrazas / Avisos
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {b.recibos_terrazas} / {b.avisos_totales}
+                    </span>
                   </div>
                 </div>
 
-                {/* Gráfico 2: Comparativa por Distritos (VUT vs Terrazas) */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Presión por Distritos: Viviendas Turísticas vs. Ocupación de Terrazas
-                  </h3>
-                  <p className="mt-0.5 text-xs text-slate-600">
-                    Comparativa de los 10 distritos con mayor parque de pisos turísticos frente a licencias de mesas y sillas (FEMP Nº 20).
-                  </p>
-                  <div className="mt-4 h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={series.distritosResumen.slice(0, 10)}
-                        layout="vertical"
-                        margin={{ left: 35, right: 16 }}
+                <button
+                  type="button"
+                  onClick={() => handleInspectBarrio(b.coddistbar, true)}
+                  className="interactive-btn mt-3 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"
+                >
+                  <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Inspeccionar barrio en el mapa</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* VISTA ESCRITORIO: Tabla analítica de alta densidad (≥ md) */}
+        <div className="mt-4 hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
+          <table className="w-full border-collapse text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold tracking-wider text-slate-700 uppercase">
+                <th className="px-3 py-3">Cód.</th>
+                <th className="px-3 py-3">Barrio</th>
+                <th className="px-3 py-3">Distrito</th>
+                <th className="px-3 py-3 text-right">ISVP (0–100)</th>
+                <th className="px-3 py-3">Nivel Alerta</th>
+                <th className="px-3 py-3 text-right">VUT (Plazas)</th>
+                <th className="px-3 py-3 text-right">VUT / km²</th>
+                <th className="px-3 py-3 text-right">Terrazas</th>
+                <th className="px-3 py-3 text-right">Censo IAE (Var.)</th>
+                <th className="px-3 py-3 text-right">Avisos (Ruido / Vía)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 bg-white">
+              {visibleBarrios.map((b) => {
+                const isSelected = selectedBarrio?.coddistbar === b.coddistbar;
+                return (
+                  <tr
+                    key={b.coddistbar}
+                    onClick={() => handleInspectBarrio(b.coddistbar, false)}
+                    className={`cursor-pointer transition-colors duration-150 ${
+                      isSelected
+                        ? "bg-sky-50/90 font-semibold"
+                        : "hover:bg-slate-50"
+                    }`}
+                  >
+                    <td className="px-3 py-2.5 font-mono text-slate-600">
+                      {b.coddistbar}
+                    </td>
+                    <td className="px-3 py-2.5 font-bold text-slate-900">
+                      {b.nombre}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-700">{b.distrito}</td>
+                    <td className="px-3 py-2.5 text-right font-mono font-extrabold text-slate-900">
+                      {b.isvp.toFixed(1)}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span
+                        className={`inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${getAlertBadgeStyle(
+                          b.nivel_alerta
+                        )}`}
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis
-                          type="number"
-                          tick={{ fontSize: 11, fill: "#475569" }}
-                        />
-                        <YAxis
-                          type="category"
-                          dataKey="distrito"
-                          width={120}
-                          tick={{ fontSize: 11, fill: "#0f172a" }}
-                        />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: "12px" }} />
-                        <Bar
-                          dataKey="vut_activas"
-                          name="VUT vigentes"
-                          fill="#1e40af"
-                          radius={[0, 4, 4, 0]}
-                        />
-                        <Bar
-                          dataKey="recibos_terrazas"
-                          name="Recibos Terrazas"
-                          fill="#f59e0b"
-                          radius={[0, 4, 4, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-
-              {/* Registro de Instantáneas Diferenciales + Ranking por Código Postal */}
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Registro Longitudinal de Instantáneas Semanales (`data/raw/`)
-                  </h3>
-                  <p className="text-xs text-slate-600">
-                    Cada captura semanal del CSV de la GVA se compara mediante SQL (`EXCEPT`) en DuckDB para detectar altas y bajas de signaturas turísticas.
-                  </p>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full border-collapse text-left text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-600 uppercase">
-                          <th className="px-3 py-2.5">Instantánea</th>
-                          <th className="px-3 py-2.5 text-right">VUT València</th>
-                          <th className="px-3 py-2.5 text-right">Plazas</th>
-                          <th className="px-3 py-2.5 text-right">Altas / Bajas</th>
-                          <th className="px-3 py-2.5">SHA-256</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 bg-white">
-                        {series.snapshotsDiff.map((s) => (
-                          <tr key={s.snapshotFile}>
-                            <td className="px-3 py-2.5 font-mono font-medium text-slate-900">
-                              {s.snapshotFile}
-                            </td>
-                            <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-900">
-                              {s.vutActivasValencia.toLocaleString("es-ES")}
-                            </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-slate-700">
-                              {s.plazasValencia.toLocaleString("es-ES")}
-                            </td>
-                            <td className="px-3 py-2.5 text-right font-mono">
-                              <span className="text-emerald-700">
-                                +{s.altasRespectoAnterior}
-                              </span>{" "}
-                              /{" "}
-                              <span className="text-red-700">
-                                -{s.bajasRespectoAnterior}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500">
-                              {s.sha256.slice(0, 12)}…
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Top Códigos Postales con Mayor Concentración de VUT en València
-                  </h3>
-                  <p className="text-xs text-slate-600">
-                    Desglose directo por código postal (`46001`–`46026`) extraído con DuckDB sobre la última instantánea de `tur-gestur-vt`.
-                  </p>
-                  <div className="max-h-[260px] overflow-y-auto rounded-xl border border-slate-200">
-                    <table className="w-full border-collapse text-left text-xs">
-                      <thead className="sticky top-0 bg-slate-50">
-                        <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase">
-                          <th className="px-3 py-2">Código Postal</th>
-                          <th className="px-3 py-2 text-right">VUT Vigentes</th>
-                          <th className="px-3 py-2 text-right">Plazas</th>
-                          <th className="px-3 py-2 text-right">Altas 2024–26</th>
-                          <th className="px-3 py-2 text-right">Sup. Media</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 bg-white">
-                        {series.codigosPostalesRanking.slice(0, 12).map((cp) => (
-                          <tr key={cp.cp} className="hover:bg-slate-50">
-                            <td className="px-3 py-2 font-mono font-bold text-blue-900">
-                              {cp.cp}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900">
-                              {cp.vut_activas.toLocaleString("es-ES")}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono text-slate-700">
-                              {cp.plazas_vut.toLocaleString("es-ES")}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono text-amber-800">
-                              +{cp.altas_recientes.toLocaleString("es-ES")}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono text-slate-600">
-                              {cp.superficie_media > 0
-                                ? `${cp.superficie_media} m²`
-                                : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: GOBERNANZA DE DATOS ABIERTOS Y AUDITORÍA FEMP 80 */}
-          {activeTab === "gobernanza" && (
-            <div className="space-y-6">
-              <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle
-                    className="mt-0.5 h-5 w-5 shrink-0 text-amber-700"
-                    aria-hidden="true"
-                  />
-                  <div className="space-y-1 text-xs text-slate-800">
-                    <p className="text-sm font-bold text-slate-900">
-                      Auditoría Ciudadana de Calidad y Desagregación del Dato Público ({auditoria.marcoLegal})
-                    </p>
-                    <p>
-                      Tal y como establece la gobernanza de <strong>radar-vivienda</strong>, cuando un dataset clave llega con retraso o carece de desagregación por barrio/sección censal, la plataforma audita públicamente la carencia y facilita la presentación de solicitudes formales ante el Ayuntamiento de València, la Oficina de Estadística y el portal Dades Obertes GVA.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-12">
-                {/* Matriz de datasets auditados */}
-                <div className="space-y-3 lg:col-span-7">
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Estado de Apertura y Desagregación Territorial (Catálogos CKAN)
-                  </h3>
-                  <div className="space-y-3">
-                    {auditoria.datasetsAuditados.map((item) => {
-                      const isSelected = selectedAuditItem.codigo === item.codigo;
-                      const isPartial =
-                        item.estadoApertura.toLowerCase().includes("parcial") ||
-                        item.estadoApertura.toLowerCase().includes("sin histórico");
-                      return (
-                        <div
-                          key={item.codigo}
-                          onClick={() => setSelectedAuditItem(item)}
-                          className={`cursor-pointer rounded-xl border p-4 transition-colors duration-150 ${
-                            isSelected
-                              ? "border-blue-700 bg-blue-50/50"
-                              : "border-slate-200 bg-white hover:bg-slate-50"
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-mono text-xs font-bold text-blue-900">
-                              {item.codigo} · {item.packageId}
-                            </span>
-                            <span
-                              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                                isPartial
-                                  ? "bg-amber-100 text-amber-900"
-                                  : "bg-emerald-100 text-emerald-900"
-                              }`}
-                            >
-                              {item.estadoApertura}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-sm font-bold text-slate-900">
-                            {item.titulo}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-600">
-                            <strong>Desagregación actual:</strong>{" "}
-                            {item.desagregacionEspacial}
-                          </p>
-                          <p className="mt-1 text-xs text-red-800">
-                            <strong>Brecha detectada:</strong>{" "}
-                            {item.incidenciaDetectada}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Generador interactivo de solicitud formal de apertura de datos */}
-                <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50 p-5 lg:col-span-5">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-900 uppercase">
-                        <Info className="h-4 w-4" aria-hidden="true" />
-                        Generador de Solicitud Formal (Ley 1/2022)
+                        {b.nivel_alerta}
                       </span>
-                      <span className="font-mono text-xs font-semibold text-slate-600">
-                        {selectedAuditItem.codigo}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-slate-900">
+                      <strong>{b.vut_activas}</strong>{" "}
+                      <span className="text-slate-600">({b.plazas_vut})</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">
+                      {b.densidad_vut_km2.toFixed(1)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-slate-800">
+                      {b.recibos_terrazas}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono">
+                      <span className="text-slate-800">{b.recibos_iae}</span>{" "}
+                      <span
+                        className={
+                          b.variacion_iae_pct < 0
+                            ? "font-bold text-red-700"
+                            : "font-semibold text-emerald-700"
+                        }
+                      >
+                        ({b.variacion_iae_pct >= 0 ? "+" : ""}
+                        {b.variacion_iae_pct}%)
                       </span>
-                    </div>
-                    <p className="text-xs text-slate-600">
-                      Selecciona cualquier dataset en la columna izquierda para generar el escrito técnico de solicitud de apertura o desagregación barrial listo para registrar:
-                    </p>
-                    <textarea
-                      readOnly
-                      value={formalRequestTemplate}
-                      rows={14}
-                      aria-label="Texto de solicitud formal de datos abiertos"
-                      className="w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-[11px] leading-relaxed text-slate-800 focus:outline-none"
-                    />
-                  </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-slate-800">
+                      <strong>{b.avisos_totales.toLocaleString("es-ES")}</strong>{" "}
+                      <span className="text-[11px] text-slate-600">
+                        ({b.avisos_ruido_convivencia} / {b.avisos_deterioro_viario})
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-                  <div className="mt-4 space-y-2.5">
-                    <button
-                      type="button"
-                      onClick={handleCopyFormalRequest}
-                      className="interactive-btn flex w-full items-center justify-center gap-2 rounded-lg bg-blue-800 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-900"
-                    >
-                      {copiedRequest ? (
-                        <>
-                          <Check className="h-4 w-4" aria-hidden="true" />
-                          <span>Solicitud copiada al portapapeles</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4" aria-hidden="true" />
-                          <span>Copiar texto de solicitud formal</span>
-                        </>
-                      )}
-                    </button>
-
-                    <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-                      <a
-                        href={auditoria.canalesOficiales.solicitud_datos_ayuntamiento}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="interactive-btn flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-800 hover:bg-slate-100"
-                      >
-                        <span>Portal Ayuntamiento</span>
-                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                      </a>
-                      <a
-                        href={`mailto:${auditoria.canalesOficiales.oficinaEstadisticaEmail}?subject=${encodeURIComponent(
-                          `Solicitud de datos desagregados por barrio (${selectedAuditItem.codigo})`
-                        )}&body=${encodeURIComponent(formalRequestTemplate)}`}
-                        className="interactive-btn flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-800 hover:bg-slate-100"
-                      >
-                        <span>Oficina Estadística</span>
-                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* Pie del explorador con botón de mostrar los 88 barrios */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-slate-600">
+          <p>
+            Mostrando <strong>{visibleBarrios.length}</strong> de{" "}
+            <strong>{filteredBarrios.length}</strong> barrios seleccionados.
+          </p>
+          {filteredBarrios.length > 24 && (
+            <button
+              type="button"
+              onClick={() => setShowAllRows(!showAllRows)}
+              className="interactive-btn rounded-xl border border-slate-300 bg-slate-100 px-4 py-2 text-xs font-bold text-slate-900 hover:bg-slate-200"
+            >
+              {showAllRows
+                ? "Mostrar primeros 24 barrios"
+                : `Ver los ${filteredBarrios.length} barrios completos`}
+            </button>
           )}
         </div>
       </section>

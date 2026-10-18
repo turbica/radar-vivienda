@@ -1,0 +1,262 @@
+---
+import PublicLayout from "../layouts/PublicLayout.astro";
+import { GovernanceTool } from "../components/GovernanceTool";
+import { loadObservatoryData } from "../lib/data";
+
+const { resumen, auditoria, dataBaseUrl } = await loadObservatoryData();
+const baseDownloadUrl = dataBaseUrl.replace(/\/+$/, "");
+
+const pageTitle =
+  "Auditoría FEMP-80, Gobernanza (Ley 1/2022) y Datos Abiertos — Radar Vivienda València";
+const pageDescription =
+  "Auditoría ciudadana de calidad y desagregación territorial de los datos abiertos de València según la Guía FEMP 80, generador de solicitudes Ley 1/2022 y descarga de datos.";
+
+const openDatasetsCatalog = [
+  {
+    name: "Cartografía e Indicadores de los 88 Barrios (GeoJSON)",
+    file: "barrios_vulnerabilidad.geojson",
+    format: "GeoJSON (RFC 7946 · EPSG:4326)",
+    description:
+      "Polígonos oficiales de los 88 barrios de València enriquecidos con el índice ISVP, los 4 vectores (0–100), VUT activas, plazas, densidad/km², terrazas, IAE y avisos vecinales.",
+    sizeHint: "~310 KB",
+  },
+  {
+    name: "Censo Procesado de Viviendas Turísticas en València (Parquet)",
+    file: "viviendas_turisticas_valencia.parquet",
+    format: "Apache Parquet (ZSTD)",
+    description:
+      "Tabla columnar de alto rendimiento con las 5.708 viviendas de uso turístico activas en el término municipal de València extraídas y normalizadas con DuckDB.",
+    sizeHint: "~185 KB",
+  },
+  {
+    name: "Resumen Ejecutivo y Métricas Barriales (JSON)",
+    file: "resumen_observatorio.json",
+    format: "JSON UTF-8",
+    description:
+      "KPIs agregados de ciudad, metadatos criptográficos SHA-256 de la última captura y matriz completa de indicadores de los 88 barrios.",
+    sizeHint: "~65 KB",
+  },
+  {
+    name: "Series Históricas (2015–2026), Distritos y Códigos Postales (JSON)",
+    file: "series_historicas.json",
+    format: "JSON UTF-8",
+    description:
+      "Evolución anual de altas desde 2015, comparativa de los 19 distritos, ranking de los 26 códigos postales y registro diferencial de instantáneas.",
+    sizeHint: "~18 KB",
+  },
+  {
+    name: "Informe de Auditoría Técnica FEMP-80 (JSON)",
+    file: "auditoria_femp80.json",
+    format: "JSON UTF-8",
+    description:
+      "Estado verificado de apertura, granularidad territorial y brechas detectadas en los catálogos CKAN de la GVA y del Ayuntamiento de València.",
+    sizeHint: "~6 KB",
+  },
+];
+---
+
+<PublicLayout
+  title={pageTitle}
+  description={pageDescription}
+  currentPath="/gobernanza"
+  snapshotFile={resumen.latestSnapshot.fileName}
+  snapshotSha256={resumen.latestSnapshot.sha256}
+  updatedAt={resumen.updatedAt}
+>
+  <!-- Cabecera de Gobernanza y Datos Abiertos -->
+  <section class="civic-grid-bg border-b border-slate-800 text-white">
+    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:py-12">
+      <div class="max-w-3xl space-y-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300 ring-1 ring-emerald-400/30">
+            Gobernanza de Datos Abiertos · Ley 1/2022
+          </span>
+          <span class="rounded-full bg-slate-800 px-3 py-1 font-mono text-xs font-semibold text-slate-300">
+            Guía FEMP 80 Conjuntos de Datos Esenciales
+          </span>
+        </div>
+
+        <h1 class="text-2xl font-extrabold tracking-tight text-white sm:text-4xl">
+          Auditoría Ciudadana FEMP-80, Transparencia Activa y Descarga de Datos
+        </h1>
+
+        <p class="text-sm leading-relaxed text-slate-300 sm:text-base">
+          Un observatorio cívico no solo visualiza lo que las administraciones
+          publican: también <strong>audita qué datos faltan o llegan sin desagregar por barrio</strong>,
+          proporciona herramientas legales para reclamar su apertura y libera todos
+          sus resultados en formatos abiertos reutilizables.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div class="mx-auto max-w-7xl space-y-12 px-4 py-10 sm:px-6">
+    <!-- SECCIÓN 1: MATRIZ DE AUDITORÍA FEMP-80 Y GENERADOR LEY 1/2022 -->
+    <section
+      aria-labelledby="heading-auditoria"
+      class="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8"
+    >
+      <div class="border-b border-slate-200 pb-4">
+        <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
+          Auditoría de Calidad del Dato Público ({auditoria.marcoLegal})
+        </span>
+        <h2
+          id="heading-auditoria"
+          class="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl"
+        >
+          Estado de Apertura y Generador de Solicitudes Formales (Ley 1/2022)
+        </h2>
+        <p class="mt-1 text-sm text-slate-600">
+          Cuando un conjunto de datos esencial carece de histórico en origen (como
+          <code>tur-gestur-vt</code> de la GVA) o no incluye código de barrio
+          municipal (como subvenciones FEMP n.º 12 y ejecución presupuestaria FEMP
+          n.º 40), cualquier ciudadano o entidad puede registrar una solicitud
+          formal de mejora:
+        </p>
+      </div>
+
+      <div class="mt-6">
+        <GovernanceTool client:visible auditoria={auditoria} />
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: CENTRO DE DESCARGAS DE DATOS ABIERTOS (OPEN DATA HUB) -->
+    <section
+      id="descargas-abiertas"
+      aria-labelledby="heading-descargas"
+      class="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8"
+    >
+      <div class="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <span class="text-xs font-bold tracking-wider text-emerald-800 uppercase">
+            Centro de Descargas Directas · Licencia GNU AGPL-3.0
+          </span>
+          <h2
+            id="heading-descargas"
+            class="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl"
+          >
+            Catálogo de Artefactos Procesados Listos para Reutilizar
+          </h2>
+          <p class="mt-1 text-sm text-slate-600">
+            Descarga directamente los ficheros generados por el motor DuckDB para
+            usarlos en QGIS, Python, R, Excel o en tus propias investigaciones:
+          </p>
+        </div>
+
+        <a
+          href="https://github.com/turbica/radar-vivienda/releases"
+          target="_blank"
+          rel="noreferrer"
+          class="interactive-btn inline-flex min-h-[42px] items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
+        >
+          Ver Histórico en GitHub Releases →
+        </a>
+      </div>
+
+      <div class="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {
+          openDatasetsCatalog.map((ds) => (
+            <article class="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/70 p-5">
+              <div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="rounded bg-sky-100 px-2 py-0.5 font-mono text-[11px] font-bold text-sky-900">
+                    {ds.format}
+                  </span>
+                  <span class="font-mono text-xs text-slate-600">
+                    {ds.sizeHint}
+                  </span>
+                </div>
+                <h3 class="mt-2.5 text-sm font-extrabold text-slate-900">
+                  {ds.name}
+                </h3>
+                <p class="mt-1.5 text-xs leading-relaxed text-slate-700">
+                  {ds.description}
+                </p>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-200/80">
+                <a
+                  href={`${baseDownloadUrl}/${ds.file}`}
+                  download={ds.file}
+                  class="interactive-btn flex min-h-[40px] w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-xs font-bold text-slate-900 hover:bg-slate-100"
+                >
+                  <span>Descargar {ds.file}</span>
+                </a>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- SECCIÓN 3: ECOSISTEMA DE PROYECTOS HERMANOS Y CANALES INSTITUCIONALES -->
+    <section
+      aria-labelledby="heading-ecosistema"
+      class="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8"
+    >
+      <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
+        Infraestructura Cívica Compartida en València
+      </span>
+      <h2
+        id="heading-ecosistema"
+        class="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl"
+      >
+        Tres proyectos hermanos sobre datos abiertos de la Comunitat Valenciana
+      </h2>
+      <p class="mt-1 text-sm text-slate-600">
+        <strong>radar-vivienda</strong> comparte arquitectura y el conector común{" "}
+        <a
+          href="https://github.com/turbica/valencia-open-data-core"
+          target="_blank"
+          rel="noreferrer"
+          class="font-bold text-sky-800 underline hover:text-slate-950"
+        >
+          turbica/valencia-open-data-core
+        </a>{" "}
+        con otros dos observatorios ciudadanos nacidos del mismo informe de
+        investigación:
+      </p>
+
+      <div class="mt-5 grid gap-4 md:grid-cols-3">
+        <div class="rounded-xl border border-sky-300 bg-sky-50/50 p-4">
+          <span class="font-mono text-xs font-bold text-sky-900">
+            01 · PROYECTO ACTUAL
+          </span>
+          <h3 class="mt-1 text-base font-extrabold text-slate-900">
+            radar-vivienda
+          </h3>
+          <p class="mt-1 text-xs leading-relaxed text-slate-700">
+            Observatorio vivo de presión residencial por viviendas turísticas,
+            desplazamiento comercial y vulnerabilidad en los 88 barrios de València.
+          </p>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+          <span class="font-mono text-xs font-bold text-slate-700">
+            02 · PROYECTO HERMANO
+          </span>
+          <h3 class="mt-1 text-base font-extrabold text-slate-900">
+            escudo-hidrologico
+          </h3>
+          <p class="mt-1 text-xs leading-relaxed text-slate-700">
+            Sistema abierto de alerta temprana de crecidas, barrancos y sequía
+            integrando datos en tiempo real del SAIH Júcar y cartografía PATRICOVA.
+          </p>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+          <span class="font-mono text-xs font-bold text-slate-700">
+            03 · PROYECTO HERMANO
+          </span>
+          <h3 class="mt-1 text-base font-extrabold text-slate-900">
+            monitor-vmp
+          </h3>
+          <p class="mt-1 text-xs leading-relaxed text-slate-700">
+            Observatorio de siniestralidad vial de patinetes (VMP) y bicicletas,
+            aforos ciclistas y puntos negros de infraestructura en València.
+          </p>
+        </div>
+      </div>
+    </section>
+  </div>
+</PublicLayout>
