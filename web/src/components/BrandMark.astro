@@ -1,0 +1,37 @@
+---
+// Marca de Radar Vivienda: casa con barrido de radar. Mismo dibujo que public/favicon.svg.
+interface Props {
+  size?: number;
+  class?: string;
+}
+
+const { size = 32, class: className } = Astro.props;
+const clipId = `casa-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<svg
+  width={size}
+  height={size}
+  viewBox="0 0 64 64"
+  fill="none"
+  aria-hidden="true"
+  class={className}
+>
+  <defs>
+    <clipPath id={clipId}>
+      <path d="M13 29.5 32 13l19 16.5V51H13z"></path>
+    </clipPath>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="#141414"></rect>
+  <g clip-path={`url(#${clipId})`}>
+    <path d="M32 51 33.74 24.06A27 27 0 0 1 48.88 29.93Z" fill="#FFD400" fill-opacity=".28"></path>
+    <g stroke="#F3F1EC" stroke-width="1.6" fill="none">
+      <circle cx="32" cy="51" r="9" stroke-opacity=".9"></circle>
+      <circle cx="32" cy="51" r="18" stroke-opacity=".6"></circle>
+      <circle cx="32" cy="51" r="27" stroke-opacity=".3"></circle>
+    </g>
+  </g>
+  <path d="M13 29.5 32 13l19 16.5V51H13z" stroke="#F3F1EC" stroke-width="3" stroke-linejoin="round"></path>
+  <path d="m32 51 11.25-14.06" stroke="#FFD400" stroke-width="2.6" stroke-linecap="round"></path>
+  <circle cx="43.25" cy="36.94" r="3.4" fill="#FFD400"></circle>
+</svg>

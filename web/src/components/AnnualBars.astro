@@ -1,0 +1,50 @@
+---
+import { fmtNum } from "../lib/barrios";
+
+interface Props {
+  rows: Array<{ anio: number; valor: number }>;
+  /** Años resaltados en tinta (el resto en gris). */
+  resaltarDesde?: number;
+  /** Año en curso, marcado con asterisco. */
+  anioParcial?: number;
+  label: string;
+  height?: number;
+}
+
+const { rows, resaltarDesde = Infinity, anioParcial, label, height = 280 } = Astro.props;
+const max = Math.max(1, ...rows.map((r) => r.valor));
+const cols = `repeat(${rows.length}, minmax(0, 1fr))`;
+---
+
+<div class="overflow-x-auto">
+  <div class="min-w-[640px]">
+    <div
+      role="img"
+      aria-label={label}
+      class="grid items-end gap-3 border-b-2 border-ink"
+      style={{ gridTemplateColumns: cols, height: `${height}px` }}
+    >
+      {
+        rows.map((r) => (
+          <div class="flex h-full flex-col items-center justify-end gap-1.5">
+            <span class="font-mono text-xs">{fmtNum(r.valor)}</span>
+            <div
+              class={r.anio >= resaltarDesde ? "w-full bg-ink" : "w-full bg-[#9c978a]"}
+              style={{ height: `${Math.max(0.6, (r.valor / max) * 84)}%` }}
+            />
+          </div>
+        ))
+      }
+    </div>
+    <div class="mt-2 grid gap-3" style={{ gridTemplateColumns: cols }} aria-hidden="true">
+      {
+        rows.map((r) => (
+          <span class="text-center font-mono text-xs">
+            {r.anio}
+            {r.anio === anioParcial ? "*" : ""}
+          </span>
+        ))
+      }
+    </div>
+  </div>
+</div>

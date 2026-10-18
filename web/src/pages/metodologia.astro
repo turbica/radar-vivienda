@@ -1,18 +1,18 @@
 ---
 import PublicLayout from "../layouts/PublicLayout.astro";
 import { loadObservatoryData } from "../lib/data";
+import { NIVEL_COLOR } from "../lib/barrios";
 import {
   CORE_VECTORS_GUIDE,
   EMPIRICAL_METRICS_GLOSSARY,
   ISVP_LEVELS,
 } from "../lib/metrics-catalog";
 
-const { resumen, benchmarks } = await loadObservatoryData();
+const { resumen } = await loadObservatoryData();
 
-const pageTitle =
-  "Guía Ciudadana de Métricas y Metodología ISVP — Radar Vivienda València";
+const pageTitle = "Método del índice ISVP — Radar Vivienda València";
 const pageDescription =
-  "Aprende qué significa cada indicador del observatorio: cómo se calcula el Índice Sintético de Vulnerabilidad y Presión (ISVP), de dónde salen los datos y cómo interpretarlos.";
+  "Qué significa cada indicador del observatorio: cómo se calcula el Índice Sintético de Vulnerabilidad y Presión (ISVP), de dónde salen los datos y cómo interpretarlos.";
 
 const faqItems = [
   {
@@ -54,6 +54,32 @@ const faqJsonLd = {
     },
   })),
 };
+
+const indice = [
+  { href: "#niveles", label: "Los cuatro niveles" },
+  { href: "#vectores", label: "Los cuatro vectores" },
+  { href: "#glosario", label: "Glosario" },
+  { href: "#proceso", label: "Proceso de datos" },
+  { href: "#preguntas", label: "Preguntas" },
+];
+
+const pasos = [
+  {
+    titulo: "Captura inmutable",
+    texto:
+      "Cada semana guardamos el CSV oficial de la GVA (tur-gestur-vt) y los datasets municipales con la fecha en el nombre y su huella SHA-256. Nunca se sobrescribe un archivo.",
+  },
+  {
+    titulo: "Altas y bajas con DuckDB",
+    texto:
+      "Comparamos cada instantánea con la anterior para saber qué licencias han entrado en el registro y cuáles han salido.",
+  },
+  {
+    titulo: "Del código postal al barrio",
+    texto:
+      "El registro de la GVA solo trae código postal. Lo repartimos entre los barrios con pesos espaciales que suman exactamente 1,00 en cada código postal.",
+  },
+];
 ---
 
 <PublicLayout
@@ -65,507 +91,148 @@ const faqJsonLd = {
   updatedAt={resumen.updatedAt}
   extraJsonLd={faqJsonLd}
 >
-  <!-- Cabecera de la Guía Ciudadana -->
-  <section class="civic-grid-bg border-b border-slate-800 text-white">
-    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:py-12">
-      <div class="max-w-3xl space-y-4">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="rounded-full bg-sky-500/20 px-3 py-1 text-xs font-bold text-sky-300 ring-1 ring-sky-400/30">
-            Manual Didáctico y Metodológico
-          </span>
-          <span class="rounded-full bg-slate-800 px-3 py-1 font-mono text-xs font-semibold text-slate-300">
-            Lectura clara para ciudadanía, prensa e investigación
-          </span>
-        </div>
+  <div class="mx-auto max-w-[1320px] px-4 sm:px-6">
+    <section class="border-b border-ink pt-12 pb-10">
+      <p class="mb-3 font-mono text-[13px] tracking-[0.08em] uppercase">Método</p>
+      <h1 class="font-display max-w-[18ch] text-[clamp(44px,6vw,80px)] leading-[0.95] font-extrabold tracking-[-0.035em]">
+        Cómo se calcula la <span class="mark">nota de cada barrio</span>
+      </h1>
+      <p class="mt-6 max-w-2xl text-[19px] leading-relaxed">
+        Qué mide cada indicador, de qué fuente oficial sale, cómo se combina en el índice ISVP de 0 a 100 y
+        qué significa cada nivel para la vida del vecindario.
+      </p>
+      <nav aria-label="En esta página" class="mt-8 flex flex-wrap gap-2">
+        {indice.map((i) => <a href={i.href} class="btn btn-line min-h-[44px] text-[15px]">{i.label}</a>)}
+      </nav>
+    </section>
 
-        <h1 class="text-2xl font-extrabold tracking-tight text-white sm:text-4xl">
-          ¿Qué estás viendo en el Observatorio? Guía Ciudadana de Métricas y Fórmulas
-        </h1>
-
-        <p class="text-sm leading-relaxed text-slate-300 sm:text-base">
-          Esta página explica en lenguaje sencillo qué mide cada indicador del
-          <strong>Radar Vivienda València</strong>, de qué fuente oficial procede,
-          cómo se calcula la puntuación de <strong>0 a 100</strong> de cada barrio
-          y qué significan los niveles de alerta para la vida cotidiana del vecindario.
-        </p>
-
-        <!-- Índice rápido de salto en móvil y escritorio -->
-        <div class="flex flex-wrap gap-2 pt-2">
-          <a
-            href="#formula-isvp"
-            class="interactive-btn rounded-xl bg-sky-500 px-3.5 py-2 text-xs font-extrabold text-slate-950 hover:bg-sky-400"
-          >
-            1. El Índice ISVP y Niveles de Alerta
-          </a>
-          <a
-            href="#vectores-explicados"
-            class="interactive-btn rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-bold text-slate-100 hover:bg-slate-800"
-          >
-            2. Las 5 Capas del Mapa
-          </a>
-          <a
-            href="#glosario-metricas"
-            class="interactive-btn rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-bold text-slate-100 hover:bg-slate-800"
-          >
-            3. Diccionario de las 10 Variables
-          </a>
-          <a
-            href="#arquitectura-datos"
-            class="interactive-btn rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-bold text-slate-100 hover:bg-slate-800"
-          >
-            4. Cruce Espacial y DuckDB
-          </a>
-          <a
-            href="#preguntas-frecuentes"
-            class="interactive-btn rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-bold text-slate-100 hover:bg-slate-800"
-          >
-            5. Preguntas Frecuentes
-          </a>
-        </div>
+    <section id="niveles" aria-labelledby="h-niveles" class="border-b border-ink py-12">
+      <h2 id="h-niveles" class="font-display mb-2 text-[32px] font-extrabold">Los cuatro niveles</h2>
+      <p class="mb-8 max-w-3xl font-mono text-sm leading-relaxed">
+        ISVP = 0,35 × presión turística + 0,25 × desplazamiento comercial + 0,20 × brecha de equidad urbana
+        + 0,20 × vulnerabilidad residencial
+      </p>
+      <div class="grid gap-px border-y-2 border-ink bg-ink sm:grid-cols-2 lg:grid-cols-4">
+        {
+          ISVP_LEVELS.map((lvl) => (
+            <div class="bg-paper p-6">
+              <div class="flex items-center justify-between gap-2">
+                <span class="flex items-center gap-2 font-bold">
+                  <span
+                    aria-hidden="true"
+                    class="h-4 w-4 rounded-full border border-ink"
+                    style={{ backgroundColor: NIVEL_COLOR[lvl.level] }}
+                  />
+                  {lvl.level}
+                </span>
+                <span class="font-mono text-xs">{lvl.range}</span>
+              </div>
+              <p class="mt-3 leading-snug font-bold">{lvl.summary}</p>
+              <p class="mt-2 text-sm leading-relaxed">{lvl.citizenMeaning}</p>
+            </div>
+          ))
+        }
       </div>
-    </div>
-  </section>
+    </section>
 
-  <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-    <div class="grid gap-10 lg:grid-cols-12">
-      <!-- Barra lateral de navegación fija en escritorio -->
-      <aside class="hidden lg:col-span-3 lg:block">
-        <div class="sticky top-24 space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div>
-            <h2 class="text-xs font-bold tracking-wider text-slate-900 uppercase">
-              Índice de la Guía
-            </h2>
-            <nav aria-label="Índice de contenidos de metodología" class="mt-3 space-y-1.5 text-xs">
-              <a
-                href="#formula-isvp"
-                class="block rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-              >
-                1. ¿Qué es el ISVP (0–100)?
-              </a>
-              <a
-                href="#vectores-explicados"
-                class="block rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-              >
-                2. Los 4 Vectores en detalle
-              </a>
-              <div class="space-y-1 pl-3 border-l border-slate-200 ml-2">
-                {
-                  CORE_VECTORS_GUIDE.map((v) => (
-                    <a
-                      href={`#${v.id}`}
-                      class="block py-1 text-[11px] font-medium text-slate-600 hover:text-sky-800"
-                    >
-                      · {v.shortTitle}
-                    </a>
-                  ))
-                }
-              </div>
-              <a
-                href="#glosario-metricas"
-                class="block rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-              >
-                3. Diccionario de Variables
-              </a>
-              <a
-                href="#arquitectura-datos"
-                class="block rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-              >
-                4. Método Espacial (CP → Barrio)
-              </a>
-              <a
-                href="#preguntas-frecuentes"
-                class="block rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-              >
-                5. Preguntas Frecuentes (FAQ)
-              </a>
-            </nav>
-          </div>
-
-          <div class="rounded-xl border border-sky-200 bg-sky-50/70 p-3.5 text-xs">
-            <p class="font-bold text-sky-950">¿Quieres ver tu barrio ahora?</p>
-            <p class="mt-1 text-slate-700">
-              Vuelve al mapa interactivo para consultar la ficha de cualquiera de los
-              88 barrios de València.
-            </p>
-            <a
-              href="/"
-              class="interactive-btn mt-3 inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 font-bold text-white hover:bg-slate-800"
-            >
-              Ir al Mapa Interactivo
-            </a>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Cuerpo principal explicativo -->
-      <div class="space-y-12 lg:col-span-9">
-        <!-- SECCIÓN 1: EL ÍNDICE SINTÉTICO ISVP Y SU FÓRMULA -->
-        <section
-          id="formula-isvp"
-          aria-labelledby="heading-formula-isvp"
-          class="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8"
-        >
-          <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
-            Sección 1 · La Métrica Principal del Observatorio
-          </span>
-          <h2
-            id="heading-formula-isvp"
-            class="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl"
-          >
-            ¿Qué es el Índice Sintético de Vulnerabilidad y Presión (ISVP)?
-          </h2>
-          <p class="mt-3 text-sm leading-relaxed text-slate-700">
-            Cuando un vecino se pregunta si su barrio está sufriendo turistificación o
-            pérdida de calidad de vida urbana, un único dato aislado no basta. Un
-            barrio puede tener muchos pisos turísticos, otro puede sufrir una
-            saturación extrema de terrazas hosteleras y ruido nocturno, y otro puede
-            tener una población mayor o de renta baja especialmente vulnerable a
-            cualquier subida del alquiler.
-          </p>
-          <p class="mt-2 text-sm leading-relaxed text-slate-700">
-            Para ofrecer una respuesta rigurosa y comparable entre los <strong>88 barrios de València</strong>,
-            calculamos el <strong>ISVP (escala de 0 a 100 puntos)</strong> mediante la
-            suma ponderada de cuatro vectores normalizados:
-          </p>
-
-          <!-- Ecuación visual clara -->
-          <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-950 p-5 text-white">
-            <p class="font-mono text-xs font-bold tracking-wider text-sky-400 uppercase">
-              Fórmula Matemática del Índice Compuesto (0 a 100 puntos)
-            </p>
-            <div class="mt-3 grid gap-3 sm:grid-cols-4">
-              <div class="rounded-xl border border-slate-800 bg-slate-900 p-3.5">
-                <span class="font-mono text-xl font-extrabold text-sky-400">35%</span>
-                <p class="mt-1 text-xs font-bold text-white">
-                  Presión Turística
-                </p>
-                <p class="mt-1 text-[11px] text-slate-300">
-                  Densidad VUT/km², plazas y nuevas altas 2024–2026.
+    <section id="vectores" aria-labelledby="h-vectores" class="border-b border-ink py-12">
+      <h2 id="h-vectores" class="font-display mb-8 text-[32px] font-extrabold">Los cuatro vectores</h2>
+      <div class="space-y-12">
+        {
+          CORE_VECTORS_GUIDE.filter((v) => v.id !== "isvp").map((v) => (
+            <article class="grid gap-8 border-t-[6px] border-ink pt-6 lg:grid-cols-12">
+              <div class="lg:col-span-4">
+                <p class="font-display text-[40px] font-extrabold">{v.weightInIsvp}</p>
+                <h3 class="font-display mt-1 text-2xl font-extrabold">{v.shortTitle}</h3>
+                <p class="mt-3 font-mono text-xs leading-relaxed">
+                  {v.sourceName}
+                  <br />
+                  {v.sourceDatasetId}
                 </p>
               </div>
-              <div class="rounded-xl border border-slate-800 bg-slate-900 p-3.5">
-                <span class="font-mono text-xl font-extrabold text-amber-400">25%</span>
-                <p class="mt-1 text-xs font-bold text-white">
-                  Desplazamiento Comercial
+              <div class="space-y-4 leading-relaxed lg:col-span-5">
+                <p>{v.plainExplanation}</p>
+                <p>
+                  <strong>Por qué importa.</strong> {v.whyItMatters}
                 </p>
-                <p class="mt-1 text-[11px] text-slate-300">
-                  Saturación de terrazas/km² y variación del censo IAE.
-                </p>
+                <p class="bg-paper-2 p-4 font-mono text-sm">{v.formulaSummary}</p>
               </div>
-              <div class="rounded-xl border border-slate-800 bg-slate-900 p-3.5">
-                <span class="font-mono text-xl font-extrabold text-purple-300">20%</span>
-                <p class="mt-1 text-xs font-bold text-white">
-                  Brecha de Equidad y Avisos
-                </p>
-                <p class="mt-1 text-[11px] text-slate-300">
-                  Quejas por ruido, convivencia, limpieza y deterioro viario.
-                </p>
-              </div>
-              <div class="rounded-xl border border-slate-800 bg-slate-900 p-3.5">
-                <span class="font-mono text-xl font-extrabold text-rose-400">20%</span>
-                <p class="mt-1 text-xs font-bold text-white">
-                  Vulnerabilidad Social
-                </p>
-                <p class="mt-1 text-[11px] text-slate-300">
-                  Fragilidad económica y demográfica municipal amplificada.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Tabla explicativa de los 4 niveles de alerta -->
-          <div class="mt-6 space-y-3">
-            <h3 class="text-base font-extrabold text-slate-900">
-              Los 4 Niveles de Alerta y cuántos barrios de València están hoy en cada uno
-            </h3>
-            <div class="grid gap-3 sm:grid-cols-2">
-              {
-                ISVP_LEVELS.map((lvl) => {
-                  const count = benchmarks.countsByAlert[lvl.level];
-                  return (
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                      <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span
-                          class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-bold ${lvl.badgeClass}`}
-                        >
-                          <span class={`h-2 w-2 rounded-full ${lvl.dotClass}`} aria-hidden="true" />
-                          Alerta {lvl.level} ({lvl.range})
-                        </span>
-                        <span class="rounded bg-white px-2 py-0.5 font-mono text-xs font-bold text-slate-800 border border-slate-200">
-                          {count} de 88 barrios
-                        </span>
-                      </div>
-                      <p class="mt-2 text-xs font-bold text-slate-900">
-                        {lvl.summary}
-                      </p>
-                      <p class="mt-1 text-xs leading-relaxed text-slate-600">
-                        {lvl.citizenMeaning}
-                      </p>
-                    </div>
-                  );
-                })
-              }
-            </div>
-          </div>
-        </section>
-
-        <!-- SECCIÓN 2: LAS 5 CAPAS DEL MAPA Y VECTORES EXPLICADOS UNO A UNO -->
-        <section
-          id="vectores-explicados"
-          aria-labelledby="heading-vectores"
-          class="scroll-mt-24 space-y-6"
-        >
-          <div>
-            <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
-              Sección 2 · Explicación Detallada de las Capas del Mapa
-            </span>
-            <h2
-              id="heading-vectores"
-              class="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl"
-            >
-              Cómo entender cada una de las 5 vistas cartográficas (0–100)
-            </h2>
-            <p class="mt-1 text-sm text-slate-600">
-              Cuando cambias de capa en el mapa interactivo o pulsas sobre las barras
-              de un barrio, estás visualizando uno de estos cinco indicadores:
-            </p>
-          </div>
-
-          <div class="space-y-5">
-            {
-              CORE_VECTORS_GUIDE.map((vec) => (
-                <article
-                  id={vec.id}
-                  class="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs"
-                >
-                  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <div>
-                      <span class="inline-block rounded-md bg-sky-100 px-2.5 py-0.5 text-xs font-bold text-sky-900">
-                        {vec.badge}
-                      </span>
-                      <h3 class="mt-1.5 text-lg font-extrabold text-slate-900">
-                        {vec.title}
-                      </h3>
-                    </div>
-                    <div class="text-right font-mono text-xs text-slate-600">
-                      <div>Fuente: <strong class="text-slate-900">{vec.sourceName}</strong></div>
-                      <div>Dataset: <code class="text-sky-800">{vec.sourceDatasetId}</code></div>
-                    </div>
-                  </div>
-
-                  <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-xl bg-slate-50 p-4 border border-slate-200/70">
-                      <h4 class="text-xs font-bold tracking-wider text-slate-900 uppercase">
-                        ¿Qué mide en palabras sencillas?
-                      </h4>
-                      <p class="mt-1.5 text-xs leading-relaxed text-slate-700">
-                        {vec.plainExplanation}
-                      </p>
-                    </div>
-
-                    <div class="rounded-xl bg-slate-50 p-4 border border-slate-200/70">
-                      <h4 class="text-xs font-bold tracking-wider text-slate-900 uppercase">
-                        ¿Por qué es clave para el barrio?
-                      </h4>
-                      <p class="mt-1.5 text-xs leading-relaxed text-slate-700">
-                        {vec.whyItMatters}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                    <div class="flex flex-wrap items-baseline justify-between gap-2">
-                      <span class="text-xs font-bold text-slate-900">
-                        Regla de cálculo:
-                      </span>
-                      <code class="rounded bg-slate-100 px-2 py-1 font-mono text-xs text-slate-800">
-                        {vec.formulaSummary}
-                      </code>
-                    </div>
-
-                    <div class="mt-3 grid gap-2 sm:grid-cols-3">
-                      {vec.interpretationGuide.map((step) => (
-                        <div class="rounded-lg border border-slate-200/80 bg-slate-50/50 p-2.5 text-xs">
-                          <div class="flex items-center justify-between gap-1">
-                            <span
-                              class={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${step.colorClass}`}
-                            >
-                              {step.label}
-                            </span>
-                            <span class="font-mono font-bold text-slate-800">
-                              {step.range}
-                            </span>
-                          </div>
-                          <p class="mt-1.5 text-[11px] text-slate-600">
-                            {step.meaning}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <p class="mt-3 rounded-xl bg-amber-50/80 border border-amber-200/80 px-4 py-2.5 text-xs text-slate-800">
-                    <strong>Evidencia real en València:</strong> {vec.realWorldExample}
-                  </p>
-                </article>
-              ))
-            }
-          </div>
-        </section>
-
-        <!-- SECCIÓN 3: DICCIONARIO COMPLETO DE LAS 10 VARIABLES EMPÍRICAS -->
-        <section
-          id="glosario-metricas"
-          aria-labelledby="heading-glosario"
-          class="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8"
-        >
-          <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
-            Sección 3 · Diccionario Ciudadano de Datos
-          </span>
-          <h2
-            id="heading-glosario"
-            class="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl"
-          >
-            Glosario de todas las columnas y cifras de las tablas
-          </h2>
-          <p class="mt-1 text-sm text-slate-600">
-            Referencia rápida para entender cada cifra que aparece en las tarjetas de
-            barrio y en el explorador comparativo:
-          </p>
-
-          <div class="mt-6 grid gap-4 md:grid-cols-2">
-            {
-              EMPIRICAL_METRICS_GLOSSARY.map((item) => (
-                <article
-                  id={item.id}
-                  class="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/60 p-4"
-                >
-                  <div>
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                      <span class="rounded bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold text-slate-800 uppercase">
-                        {item.category}
-                      </span>
-                      <code class="font-mono text-[11px] text-sky-800">
-                        {item.unit}
-                      </code>
-                    </div>
-                    <h3 class="mt-2 text-sm font-extrabold text-slate-900">
-                      {item.name}
-                    </h3>
-                    <p class="mt-1.5 text-xs leading-relaxed text-slate-700">
-                      <strong>Qué es:</strong> {item.whatIsIt}
+              <ul class="space-y-3 lg:col-span-3">
+                {v.interpretationGuide.map((step) => (
+                  <li class="border-b border-ink/30 pb-3">
+                    <p class="flex justify-between gap-3 text-sm font-bold">
+                      <span>{step.label}</span>
+                      <span class="font-mono font-normal">{step.range}</span>
                     </p>
-                    <p class="mt-1.5 text-xs leading-relaxed text-slate-700">
-                      <strong>Cómo leerlo:</strong> {item.howToReadIt}
-                    </p>
-                  </div>
-                  <p class="mt-3 border-t border-slate-200/80 pt-2 font-mono text-[11px] text-slate-600">
-                    Origen: {item.source}
-                  </p>
-                </article>
-              ))
-            }
-          </div>
-        </section>
-
-        <!-- SECCIÓN 4: ARQUITECTURA DE DATOS, DUCKDB Y PONDERACIÓN ESPACIAL -->
-        <section
-          id="arquitectura-datos"
-          aria-labelledby="heading-arquitectura"
-          class="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8"
-        >
-          <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
-            Sección 4 · Transparencia Algorítmica y Reproducibilidad
-          </span>
-          <h2
-            id="heading-arquitectura"
-            class="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl"
-          >
-            ¿Cómo procesamos y cruzamos los datos sin alterar las fuentes?
-          </h2>
-
-          <div class="mt-4 grid gap-4 md:grid-cols-3">
-            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-              <span class="font-mono text-xs font-bold text-sky-800">
-                PASO 1 · CAPTURA INMUTABLE
-              </span>
-              <h3 class="mt-1 text-sm font-extrabold text-slate-900">
-                Serie temporal con firma SHA-256
-              </h3>
-              <p class="mt-1.5 text-xs leading-relaxed text-slate-700">
-                Cada semana descargamos el CSV oficial de la GVA (<code>tur-gestur-vt</code>)
-                y los datasets municipales CKAN en <code>data/raw/</code> con la
-                fecha en el nombre y sin sobrescribir jamás archivos previos.
-              </p>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-              <span class="font-mono text-xs font-bold text-amber-800">
-                PASO 2 · MOTOR SQL DUCKDB
-              </span>
-              <h3 class="mt-1 text-sm font-extrabold text-slate-900">
-                Detección de altas y bajas (`EXCEPT`)
-              </h3>
-              <p class="mt-1.5 text-xs leading-relaxed text-slate-700">
-                Mediante consultas SQL analíticas en <strong>DuckDB</strong>,
-                comparamos las signaturas turísticas entre instantáneas consecutivas
-                para descubrir qué licencias nuevas han entrado y cuáles se han dado
-                de baja.
-              </p>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-              <span class="font-mono text-xs font-bold text-emerald-800">
-                PASO 3 · INTERSECCIÓN ESPACIAL
-              </span>
-              <h3 class="mt-1 text-sm font-extrabold text-slate-900">
-                De Código Postal (`46001`–`46026`) a Barrio
-              </h3>
-              <p class="mt-1.5 text-xs leading-relaxed text-slate-700">
-                Los registros con código de barrio municipal (<code>coddistbar</code>)
-                se cruzan directamente; el censo GVA por código postal se proyecta
-                sobre los 88 barrios mediante pesos espaciales verificados con
-                tests unitarios (suma exacta = <code>1,00</code>).
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <!-- SECCIÓN 5: PREGUNTAS FRECUENTES (FAQ) -->
-        <section
-          id="preguntas-frecuentes"
-          aria-labelledby="heading-faq"
-          class="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8"
-        >
-          <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
-            Sección 5 · Resolución de Dudas
-          </span>
-          <h2
-            id="heading-faq"
-            class="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl"
-          >
-            Preguntas Frecuentes sobre el Observatorio
-          </h2>
-
-          <div class="mt-5 space-y-4">
-            {
-              faqItems.map((faq) => (
-                <details class="group rounded-xl border border-slate-200 bg-slate-50/60 p-4 open:bg-white">
-                  <summary class="cursor-pointer list-none font-bold text-slate-900 text-sm flex items-center justify-between gap-3">
-                    <span>{faq.question}</span>
-                    <span class="rounded-lg bg-slate-200/80 px-2 py-0.5 font-mono text-xs text-slate-700 group-open:bg-slate-900 group-open:text-white">
-                      +
-                    </span>
-                  </summary>
-                  <p class="mt-3 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-700 sm:text-sm">
-                    {faq.answer}
-                  </p>
-                </details>
-              ))
-            }
-          </div>
-        </section>
+                    <p class="mt-1 text-sm">{step.meaning}</p>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))
+        }
       </div>
-    </div>
+    </section>
+
+    <section id="glosario" aria-labelledby="h-glosario" class="border-b border-ink py-12">
+      <h2 id="h-glosario" class="font-display mb-8 text-[32px] font-extrabold">Glosario de variables</h2>
+      <dl class="grid gap-x-10 gap-y-8 md:grid-cols-2">
+        {
+          EMPIRICAL_METRICS_GLOSSARY.map((item) => (
+            <div class="border-t-2 border-ink pt-4">
+              <dt>
+                <span class="block font-mono text-xs uppercase">
+                  {item.category} · {item.unit}
+                </span>
+                <span class="font-display mt-1 block text-xl font-extrabold">{item.name}</span>
+              </dt>
+              <dd class="mt-2 space-y-2 text-[15px] leading-relaxed">
+                <p>{item.whatIsIt}</p>
+                <p>
+                  <strong>Cómo leerlo.</strong> {item.howToReadIt}
+                </p>
+                <p class="font-mono text-xs text-muted">Fuente: {item.source}</p>
+              </dd>
+            </div>
+          ))
+        }
+      </dl>
+    </section>
+
+    <section id="proceso" aria-labelledby="h-proceso" class="border-b border-ink py-12">
+      <h2 id="h-proceso" class="font-display mb-8 text-[32px] font-extrabold">Proceso de datos</h2>
+      <ol class="grid gap-8 md:grid-cols-3">
+        {
+          pasos.map((p, i) => (
+            <li class="border-t-[6px] border-ink pt-4">
+              <p class="font-mono text-xs uppercase">Paso {i + 1}</p>
+              <h3 class="font-display mt-1 text-xl font-extrabold">{p.titulo}</h3>
+              <p class="mt-2 leading-relaxed">{p.texto}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+
+    <section id="preguntas" aria-labelledby="h-preguntas" class="flex flex-wrap gap-10 py-12 pb-16">
+      <h2 id="h-preguntas" class="font-display flex-[1_1_260px] text-[32px] font-extrabold">
+        Preguntas frecuentes
+      </h2>
+      <div class="min-w-0 flex-[2_1_560px] border-t-2 border-ink">
+        {
+          faqItems.map((faq) => (
+            <details class="group border-b border-ink py-5">
+              <summary class="flex cursor-pointer list-none items-start justify-between gap-6 text-lg font-bold">
+                {faq.question}
+                <span aria-hidden="true" class="font-mono text-xl transition-transform group-open:rotate-45">
+                  +
+                </span>
+              </summary>
+              <p class="mt-3 max-w-3xl leading-relaxed">{faq.answer}</p>
+            </details>
+          ))
+        }
+      </div>
+    </section>
   </div>
 </PublicLayout>

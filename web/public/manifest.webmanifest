@@ -1,18 +1,24 @@
 {
   "name": "Radar Vivienda València — Observatorio de Presión Residencial y Equidad de Barrio",
-  "short_name": "Radar Vivienda VLC",
+  "short_name": "Radar Vivienda",
   "description": "Observatorio ciudadano de turistificación, desplazamiento comercial y vulnerabilidad barrial en los 88 barrios de València.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#0f172a",
+  "background_color": "#f3f1ec",
+  "theme_color": "#141414",
   "lang": "es",
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

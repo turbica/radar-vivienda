@@ -1,0 +1,161 @@
+---
+import { stat } from "node:fs/promises";
+import path from "node:path";
+import PublicLayout from "../layouts/PublicLayout.astro";
+import { GovernanceTool } from "../components/GovernanceTool";
+import { loadObservatoryData } from "../lib/data";
+import { fmtNum } from "../lib/barrios";
+
+const { resumen, auditoria, dataBaseUrl, fuentes } = await loadObservatoryData();
+const baseUrl = dataBaseUrl.replace(/\/+$/, "");
+
+async function tamano(fileName: string): Promise<string | null> {
+  const candidates = [
+    path.resolve(process.cwd(), "..", "data", "processed", fileName),
+    path.resolve(process.cwd(), "public", "data", "processed", fileName),
+  ];
+  for (const file of candidates) {
+    try {
+      const { size } = await stat(file);
+      return size >= 1024 * 1024
+        ? `${(size / 1024 / 1024).toLocaleString("es-ES", { maximumFractionDigits: 1 })} MB`
+        : `${Math.max(1, Math.round(size / 1024))} KB`;
+    } catch {
+      // Prueba la siguiente ruta
+    }
+  }
+  return null;
+}
+
+const catalogo = await Promise.all(
+  [
+    {
+      formato: "GeoJSON",
+      nombre: "Barrios con índice",
+      file: "barrios_vulnerabilidad.geojson",
+      texto: `Los ${resumen.allBarrios.length} barrios con su ISVP, los cuatro vectores y las cifras de base.`,
+    },
+    {
+      formato: "Parquet",
+      nombre: "Viviendas turísticas",
+      file: "viviendas_turisticas_valencia.parquet",
+      texto: `Las ${fmtNum(resumen.kpis.vutActivasValencia)} licencias de València del registro GVA, limpias y asignadas a barrio.`,
+    },
+    {
+      formato: "JSON",
+      nombre: "Resumen del observatorio",
+      file: "resumen_observatorio.json",
+      texto: "Cifras de ciudad, metadatos de la última captura y la tabla completa de barrios.",
+    },
+    {
+      formato: "JSON",
+      nombre: "Series históricas",
+      file: "series_historicas.json",
+      texto: "Altas anuales desde 2015, distritos, códigos postales y registro de capturas.",
+    },
+    {
+      formato: "JSON",
+      nombre: "Auditoría FEMP-80",
+      file: "auditoria_femp80.json",
+      texto: "Estado de apertura y carencias de cada conjunto de datos municipal y autonómico.",
+    },
+  ].map(async (d) => ({ ...d, tamano: await tamano(d.file) }))
+);
+
+const snapshot = resumen.latestSnapshot;
+
+const pageTitle = "Datos abiertos y solicitudes de transparencia — Radar Vivienda València";
+const pageDescription =
+  "Descarga los datos del observatorio (GeoJSON, Parquet, JSON), consulta el registro público de carencias de los datos municipales y genera una solicitud formal amparada en la Ley 1/2022.";
+---
+
+<PublicLayout
+  title={pageTitle}
+  description={pageDescription}
+  currentPath="/datos"
+  snapshotFile={snapshot.fileName}
+  snapshotSha256={snapshot.sha256}
+  updatedAt={resumen.updatedAt}
+>
+  <div class="mx-auto max-w-[1320px] px-4 sm:px-6">
+    <section class="grid items-end gap-8 border-b border-ink pt-12 pb-10 lg:grid-cols-2">
+      <div>
+        <p class="mb-3 font-mono text-[13px] tracking-[0.08em] uppercase">Datos abiertos</p>
+        <h1 class="font-display text-[clamp(44px,6vw,80px)] leading-[0.95] font-extrabold tracking-[-0.035em]">
+          Lo que falta, <span class="mark">lo pedimos</span>
+        </h1>
+      </div>
+      <p class="max-w-xl text-[19px] leading-relaxed">
+        Publicamos cada archivo que usamos. Cuando un dato público no existe o llega incompleto, lo
+        solicitamos por la vía oficial y lo dejamos anotado aquí.
+      </p>
+    </section>
+
+    <section aria-labelledby="h-descargas" class="border-b border-ink py-12">
+      <div class="mb-6 flex flex-wrap items-baseline justify-between gap-3">
+        <h2 id="h-descargas" class="font-display text-[32px] font-extrabold">Descargas</h2>
+        <a href="https://github.com/turbica/radar-vivienda/releases" class="font-bold text-ink">
+          Histórico completo en GitHub Releases →
+        </a>
+      </div>
+      <ul class="border-t-2 border-ink">
+        {
+          catalogo.map((d) => (
+            <li class="grid gap-3 border-b border-ink py-5 md:grid-cols-[120px_1fr_auto] md:items-center md:gap-8">
+              <span class="self-start bg-ink px-2 py-1 text-center font-mono text-xs text-paper md:self-center">
+                {d.formato}
+              </span>
+              <span>
+                <span class="font-display block text-xl font-extrabold">{d.nombre}</span>
+                <span class="block text-[15px] leading-relaxed">{d.texto}</span>
+              </span>
+              <a href={`${baseUrl}/${d.file}`} download={d.file} class="btn btn-line justify-self-start">
+                Descargar{d.tamano ? ` · ${d.tamano}` : ""}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+
+      <div class="mt-8 grid gap-6 bg-paper-2 p-6 font-mono text-sm md:grid-cols-2">
+        <dl class="space-y-1.5">
+          <div class="flex flex-wrap gap-x-3"><dt class="text-muted">Instantánea</dt><dd>{snapshot.fileName}</dd></div>
+          <div class="flex flex-wrap gap-x-3"><dt class="text-muted">sha256</dt><dd class="break-all">{snapshot.sha256}</dd></div>
+          <div class="flex flex-wrap gap-x-3"><dt class="text-muted">Origen</dt><dd>{snapshot.publisher ?? "Generalitat Valenciana"}</dd></div>
+          <div class="flex flex-wrap gap-x-3"><dt class="text-muted">Licencia</dt><dd>{snapshot.license ?? "Creative Commons Attribution"}</dd></div>
+        </dl>
+        <div class="space-y-2">
+          <p class="text-muted">Sincroniza el histórico en tu instancia:</p>
+          <pre class="overflow-x-auto bg-ink p-4 text-paper"><code>pnpm data:sync</code></pre>
+          <a href={fuentes.gva_viviendas_turisticas_ficha} class="inline-block font-sans font-bold text-ink">
+            Ficha del dataset en Dades Obertes GVA →
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-solicitud" class="border-b border-ink py-12">
+      <h2 id="h-solicitud" class="font-display mb-2 text-[32px] font-extrabold">Carencias y solicitudes</h2>
+      <p class="mb-8 max-w-3xl leading-relaxed">
+        Auditoría de los datos que usa el observatorio según {auditoria.marcoLegal}. Elige un conjunto de
+        datos para ver qué le falta y te preparamos el escrito para pedirlo: cualquier persona o entidad
+        puede registrarlo.
+      </p>
+      <GovernanceTool client:visible auditoria={auditoria} />
+    </section>
+
+    <section aria-labelledby="h-licencias" class="flex flex-wrap gap-10 py-12 pb-16">
+      <h2 id="h-licencias" class="font-display flex-[1_1_260px] text-[32px] font-extrabold">Licencias y cita</h2>
+      <div class="min-w-0 flex-[2_1_560px] space-y-4 leading-relaxed">
+        <p>
+          Los datos de origen conservan la licencia de cada organismo: Generalitat Valenciana — Dades Obertes
+          (CC BY) y Ayuntamiento de València. El código del observatorio es software libre bajo AGPL-3.0.
+        </p>
+        <p class="border-2 border-dashed border-ink p-4 font-mono text-sm">
+          Radar Vivienda València. Índice ISVP por barrio, instantánea {snapshot.fileName}.
+          https://github.com/turbica/radar-vivienda
+        </p>
+      </div>
+    </section>
+  </div>
+</PublicLayout>

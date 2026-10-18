@@ -1,0 +1,101 @@
+---
+import PublicLayout from "../../layouts/PublicLayout.astro";
+import LevelLegend from "../../components/LevelLegend.astro";
+import { BarrioSearch } from "../../components/BarrioSearch";
+import { loadObservatoryData } from "../../lib/data";
+import {
+  NIVEL_COLOR,
+  NIVEL_ORDEN,
+  fmtNum,
+  nombreLegible,
+  rankingIsvp,
+  slugBarrio,
+  toBusqueda,
+} from "../../lib/barrios";
+
+const { resumen, benchmarks } = await loadObservatoryData();
+const ranking = rankingIsvp(resumen.allBarrios);
+const posicion = new Map(ranking.map((b, i) => [b.coddistbar, i + 1]));
+const grupos = NIVEL_ORDEN.map((nivel) => ({
+  nivel,
+  barrios: ranking.filter((b) => b.nivel_alerta === nivel),
+})).filter((g) => g.barrios.length > 0);
+
+const pageTitle = `Los ${resumen.allBarrios.length} barrios de València por presión residencial — Radar Vivienda`;
+const pageDescription =
+  "Ranking de los barrios de València según el índice ISVP: viviendas turísticas, comercio de barrio, avisos vecinales y vulnerabilidad social.";
+---
+
+<PublicLayout
+  title={pageTitle}
+  description={pageDescription}
+  currentPath="/barrios"
+  snapshotFile={resumen.latestSnapshot.fileName}
+  snapshotSha256={resumen.latestSnapshot.sha256}
+  updatedAt={resumen.updatedAt}
+>
+  <div class="mx-auto max-w-[1320px] px-4 sm:px-6">
+    <section class="border-b border-ink pt-12 pb-10">
+      <p class="mb-3 font-mono text-[13px] tracking-[0.08em] uppercase">Índice de barrios</p>
+      <h1 class="font-display text-[clamp(44px,6vw,80px)] leading-[0.95] font-extrabold tracking-[-0.035em]">
+        Los {resumen.allBarrios.length} barrios, de más a menos presión
+      </h1>
+      <div class="mt-8">
+        <BarrioSearch client:load barrios={toBusqueda(resumen.allBarrios)} />
+      </div>
+      <div class="mt-4">
+        <LevelLegend counts={benchmarks.countsByAlert} />
+      </div>
+    </section>
+
+    {
+      grupos.map((g) => (
+        <section aria-labelledby={`nivel-${slugBarrio(g.nivel)}`} class="border-b border-ink py-10">
+          <div class="mb-4 flex flex-wrap items-baseline gap-3">
+            <span
+              aria-hidden="true"
+              class="h-5 w-5 rounded-full border border-ink"
+              style={{ backgroundColor: NIVEL_COLOR[g.nivel] }}
+            />
+            <h2 id={`nivel-${slugBarrio(g.nivel)}`} class="font-display text-[32px] font-extrabold">
+              Nivel {g.nivel.toLowerCase()}
+            </h2>
+            <span class="font-mono text-[13px]">{g.barrios.length} barrios</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[720px] border-collapse text-left">
+              <thead>
+                <tr class="border-b-2 border-ink font-mono text-xs uppercase">
+                  <th scope="col" class="w-12 py-2 font-normal">#</th>
+                  <th scope="col" class="py-2 font-normal">Barrio</th>
+                  <th scope="col" class="py-2 font-normal">Distrito</th>
+                  <th scope="col" class="py-2 text-right font-normal">VUT</th>
+                  <th scope="col" class="py-2 text-right font-normal">VUT/km²</th>
+                  <th scope="col" class="py-2 text-right font-normal">Altas 24–26</th>
+                  <th scope="col" class="py-2 text-right font-normal">ISVP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.barrios.map((b) => (
+                  <tr class="link-row border-b border-ink/30">
+                    <td class="py-3 font-mono text-[13px]">{posicion.get(b.coddistbar)}</td>
+                    <td class="py-3">
+                      <a href={`/barrios/${slugBarrio(b.nombre)}`} class="link-row-name font-bold text-ink no-underline">
+                        {nombreLegible(b.nombre)}
+                      </a>
+                    </td>
+                    <td class="py-3 text-muted">{b.distrito}</td>
+                    <td class="py-3 text-right font-mono">{fmtNum(b.vut_activas)}</td>
+                    <td class="py-3 text-right font-mono">{fmtNum(b.densidad_vut_km2, 1)}</td>
+                    <td class="py-3 text-right font-mono">{fmtNum(b.vut_altas_recientes)}</td>
+                    <td class="font-display py-3 text-right text-xl font-extrabold">{fmtNum(b.isvp, 1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</PublicLayout>

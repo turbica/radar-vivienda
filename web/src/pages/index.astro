@@ -1,15 +1,42 @@
 ---
 import PublicLayout from "../layouts/PublicLayout.astro";
-import { ObservatoryApp } from "../components/ObservatoryApp";
+import AnnualBars from "../components/AnnualBars.astro";
+import LevelLegend from "../components/LevelLegend.astro";
+import { BarrioSearch } from "../components/BarrioSearch";
+import { PressureMap } from "../components/PressureMap";
 import { loadObservatoryData } from "../lib/data";
-import { ISVP_LEVELS } from "../lib/metrics-catalog";
+import { fmtNum, nombreLegible, rankingIsvp, slugBarrio, toBusqueda } from "../lib/barrios";
 
-const { resumen, benchmarks, dataBaseUrl } = await loadObservatoryData();
+const { resumen, series, benchmarks, dataBaseUrl } = await loadObservatoryData();
+const baseUrl = dataBaseUrl.replace(/\/+$/, "");
+const { kpis } = resumen;
 
-const pageTitle =
-  "Radar Vivienda València — Observatorio de Presión Residencial, Comercio y Equidad de Barrio";
-const pageDescription =
-  "Observatorio público y abierto sobre viviendas turísticas (GVA tur-gestur-vt), desplazamiento comercial y vulnerabilidad urbana en los 88 barrios de València.";
+const ranking = rankingIsvp(resumen.allBarrios);
+const top10 = ranking.slice(0, 10);
+const busqueda = toBusqueda(resumen.allBarrios);
+const destacados = ranking.slice(0, 4).map((b) => slugBarrio(b.nombre));
+
+const anioCaptura = new Date(resumen.latestSnapshot.capturedAt).getFullYear();
+const serie = series.serieAnualAltas.map((r) => ({ anio: r.anio, valor: r.nuevas_licencias }));
+const fechaCorte = new Date(resumen.latestSnapshot.lastModified ?? resumen.latestSnapshot.capturedAt)
+  .toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+
+const vectores = [
+  { peso: "35 %", nombre: "Presión turística", texto: "Licencias por km², plazas y velocidad de nuevas altas." },
+  { peso: "25 %", nombre: "Desplazamiento comercial", texto: "Cambio en actividades económicas (IAE) y terrazas." },
+  { peso: "20 %", nombre: "Brecha de equidad", texto: "Avisos de deterioro frente al gasto en mantenimiento." },
+  { peso: "20 %", nombre: "Vulnerabilidad residencial", texto: "Fragilidad social y demográfica del vecindario." },
+];
+
+const cifras = [
+  { valor: kpis.plazasTuristicasValencia, texto: "plazas turísticas en la ciudad" },
+  { valor: kpis.altasRecientes2024a2026, texto: "altas nuevas entre 2024 y 2026" },
+  { valor: kpis.avisosCiudadanosAnalizados, texto: "avisos ciudadanos analizados" },
+  { valor: kpis.vutActivasComunitat, texto: "pisos turísticos en la Comunitat" },
+];
+
+const pageTitle = "Radar Vivienda València — Presión residencial barrio a barrio";
+const pageDescription = `${fmtNum(kpis.vutActivasValencia)} viviendas turísticas y ${kpis.barriosAlertaCriticaOAlta} barrios en alerta. Observatorio semanal de turistificación, comercio de barrio y equidad urbana en los 88 barrios de València.`;
 ---
 
 <PublicLayout
@@ -20,376 +47,115 @@ const pageDescription =
   snapshotSha256={resumen.latestSnapshot.sha256}
   updatedAt={resumen.updatedAt}
 >
-  <!-- HERO EJECUTIVO INSTITUCIONAL (0 JS, LCP Instantáneo) -->
-  <section class="civic-grid-bg border-b border-slate-800 text-white">
-    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:py-12">
-      <div class="grid gap-8 lg:grid-cols-12 lg:items-center">
-        <div class="space-y-4 lg:col-span-8">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded-full bg-sky-500/20 px-3 py-1 text-xs font-bold text-sky-300 ring-1 ring-sky-400/30">
-              Observatorio Cívico de Datos Abiertos · València
-            </span>
-            <span class="rounded-full bg-amber-500/20 px-3 py-1 font-mono text-xs font-semibold text-amber-200 ring-1 ring-amber-400/30">
-              88 Barrios · 19 Distritos · 26 Códigos Postales
-            </span>
-          </div>
-
-          <h1 class="text-2xl font-extrabold tracking-tight text-white sm:text-4xl lg:leading-[1.15]">
-            Radar de Presión Residencial, Desplazamiento Comercial y Equidad de Barrio
-          </h1>
-
-          <p class="max-w-3xl text-sm leading-relaxed text-slate-300 sm:text-base">
-            Plataforma pública de seguimiento longitudinal que cruza cada semana el
-            registro autonómico de <strong>Viviendas de Uso Turístico (GVA)</strong> con
-            el catálogo municipal de <strong>actividad comercial (IAE y terrazas)</strong>,
-            <strong>quejas vecinales de convivencia</strong> y <strong>vulnerabilidad socioeconómica</strong> en cada barrio de València.
-          </p>
-
-          <div class="flex flex-wrap items-center gap-3 pt-1">
-            <a
-              href="#estacion-cartografica"
-              class="interactive-btn inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-sky-500 px-5 py-2.5 text-xs font-extrabold text-slate-950 shadow-sm hover:bg-sky-400 sm:text-sm"
-            >
-              <span>Explorar Mapa y Barrios</span>
-            </a>
-            <a
-              href="/metodologia"
-              class="interactive-btn inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/90 px-4 py-2.5 text-xs font-bold text-slate-100 hover:bg-slate-800 sm:text-sm"
-            >
-              <span>¿Qué significa cada métrica? (Guía Ciudadana)</span>
-            </a>
-            <a
-              href="/analisis"
-              class="interactive-btn inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-900/50 px-4 py-2.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 sm:text-sm"
-            >
-              <span>Ver evolución 2015–2026</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- Resumen ejecutivo lateral en el Hero -->
-        <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-lg lg:col-span-4">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-            <span class="text-xs font-bold tracking-wider text-sky-400 uppercase">
-              Radiografía Actual de València
-            </span>
-            <span class="font-mono text-[11px] text-slate-300">
-              Media ISVP: <strong class="text-white">{benchmarks.avgIsvp}/100</strong>
-            </span>
-          </div>
-
-          <dl class="mt-3.5 grid grid-cols-2 gap-3 text-xs">
-            <div class="rounded-xl bg-slate-950/70 p-3 border border-slate-800/80">
-              <dt class="text-slate-300">VUT activas ciudad</dt>
-              <dd class="mt-1 font-mono text-xl font-extrabold text-white">
-                {resumen.kpis.vutActivasValencia.toLocaleString("es-ES")}
-              </dd>
-              <span class="text-[11px] text-amber-300 font-mono">
-                {resumen.kpis.plazasTuristicasValencia.toLocaleString("es-ES")} plazas
-              </span>
-            </div>
-
-            <div class="rounded-xl bg-slate-950/70 p-3 border border-slate-800/80">
-              <dt class="text-slate-300">Altas 2024–2026</dt>
-              <dd class="mt-1 font-mono text-xl font-extrabold text-amber-400">
-                +{resumen.kpis.altasRecientes2024a2026.toLocaleString("es-ES")}
-              </dd>
-              <span class="text-[11px] text-slate-300">
-                50,7% del parque actual
-              </span>
-            </div>
-
-            <div class="rounded-xl bg-slate-950/70 p-3 border border-slate-800/80">
-              <dt class="text-slate-300">Alerta Crítica / Alta</dt>
-              <dd class="mt-1 font-mono text-xl font-extrabold text-red-400">
-                {resumen.kpis.barriosAlertaCriticaOAlta}{" "}
-                <span class="text-xs font-normal text-slate-300">/ 88</span>
-              </dd>
-              <span class="text-[11px] text-slate-300">
-                Barrios con ISVP ≥ 46
-              </span>
-            </div>
-
-            <div class="rounded-xl bg-slate-950/70 p-3 border border-slate-800/80">
-              <dt class="text-slate-300">Densidad media</dt>
-              <dd class="mt-1 font-mono text-xl font-extrabold text-sky-300">
-                {benchmarks.avgDensidadVutKm2}
-              </dd>
-              <span class="text-[11px] text-slate-300">
-                VUT por km² barrial
-              </span>
-            </div>
-          </dl>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div class="mx-auto max-w-7xl space-y-10 px-4 py-8 sm:px-6">
-    <!-- TARJETAS KPI CON EXPLICACIÓN PEDAGÓGICA INTEGRADA -->
-    <section aria-labelledby="heading-kpis" class="space-y-4">
-      <div class="flex flex-wrap items-end justify-between gap-2">
+  <div class="mx-auto max-w-[1320px] px-4 sm:px-6">
+    <section class="border-b border-ink pt-12 pb-10 sm:pt-14">
+      <p class="mb-4 font-mono text-[13px] tracking-[0.08em] uppercase">
+        Edición semanal · nº {kpis.snapshotsAcumulados} · València
+      </p>
+      <h1 class="font-display max-w-[16ch] text-[clamp(44px,7vw,96px)] leading-[0.95] font-extrabold tracking-[-0.035em]">
+        {fmtNum(kpis.vutActivasValencia)} pisos turísticos.{" "}
+        <span class="mark">{kpis.barriosAlertaCriticaOAlta} barrios</span> en alerta.
+      </h1>
+      <div class="mt-10 grid items-start gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <p class="max-w-xl text-[19px] leading-relaxed">
+          Cada semana descargamos el registro de viviendas turísticas de la Generalitat y lo cruzamos
+          con comercio, avisos vecinales y gasto municipal. La GVA no guarda histórico: esta serie la
+          construimos nosotros.
+        </p>
         <div>
-          <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
-            Indicadores Clave de Ciudad · ¿Qué estamos midiendo?
-          </span>
-          <h2 id="heading-kpis" class="text-lg font-extrabold text-slate-900 sm:text-xl">
-            Cuatro dimensiones para entender la presión barrial en València
-          </h2>
+          <h2 class="font-display mb-3 text-2xl font-extrabold">¿Cómo está tu barrio?</h2>
+          <BarrioSearch
+            client:load
+            barrios={busqueda}
+            destacados={destacados}
+            destacadosLabel="Los más tensionados:"
+          />
         </div>
-        <a
-          href="/metodologia"
-          class="text-xs font-bold text-sky-800 underline decoration-sky-300 underline-offset-2 hover:text-slate-950"
-        >
-          Ver explicación completa de las 12 métricas y fórmulas →
-        </a>
-      </div>
-
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <!-- KPI 1 -->
-        <article class="interactive-card-hover flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="rounded-md bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-900">
-                1. Presión Habitacional (35%)
-              </span>
-              <span class="font-mono text-[11px] font-semibold text-slate-600">
-                GVA tur-gestur-vt
-              </span>
-            </div>
-            <p class="mt-3 font-mono text-3xl font-extrabold text-slate-900">
-              {resumen.kpis.vutActivasValencia.toLocaleString("es-ES")}{" "}
-              <span class="text-sm font-semibold text-slate-600">VUT</span>
-            </p>
-            <p class="mt-1 text-xs font-semibold text-slate-800">
-              {resumen.kpis.plazasTuristicasValencia.toLocaleString("es-ES")} plazas turísticas (
-              <span class="text-amber-800">
-                +{resumen.kpis.altasRecientes2024a2026.toLocaleString("es-ES")} desde 2024
-              </span>
-              )
-            </p>
-            <p class="mt-2.5 text-xs leading-relaxed text-slate-600">
-              <strong>¿Qué significa?</strong> Cada piso turístico activo reduce el
-              parque disponible de vivienda habitual. Medimos su densidad por km² y
-              su ritmo de crecimiento reciente.
-            </p>
-          </div>
-          <a
-            href="/metodologia#presion_turistica"
-            class="mt-3 inline-block text-xs font-bold text-sky-800 hover:underline"
-          >
-            Cómo se calcula la Presión Turística →
-          </a>
-        </article>
-
-        <!-- KPI 2 -->
-        <article class="interactive-card-hover flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="rounded-md bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-900">
-                Índice Sintético ISVP (0–100)
-              </span>
-              <span class="font-mono text-[11px] font-semibold text-slate-600">
-                88 Barrios
-              </span>
-            </div>
-            <p class="mt-3 font-mono text-3xl font-extrabold text-red-700">
-              {resumen.kpis.barriosAlertaCriticaOAlta}{" "}
-              <span class="text-base font-normal text-slate-600">
-                / {resumen.kpis.barriosAnalizados} barrios
-              </span>
-            </p>
-            <p class="mt-1 text-xs font-semibold text-slate-800">
-              {benchmarks.countsByAlert.Crítica} en Alerta Crítica y{" "}
-              {benchmarks.countsByAlert.Alta} en Alerta Alta
-            </p>
-            <p class="mt-2.5 text-xs leading-relaxed text-slate-600">
-              <strong>¿Qué significa?</strong> El ISVP combina de 0 a 100 los cuatro
-              vectores del observatorio para identificar dónde coinciden saturación
-              turística, pérdida comercial y fragilidad social.
-            </p>
-          </div>
-          <a
-            href="/metodologia#isvp"
-            class="mt-3 inline-block text-xs font-bold text-sky-800 hover:underline"
-          >
-            Ver fórmula y umbrales del ISVP →
-          </a>
-        </article>
-
-        <!-- KPI 3 -->
-        <article class="interactive-card-hover flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900">
-                3. Convivencia y Espacio (20%)
-              </span>
-              <span class="font-mono text-[11px] font-semibold text-slate-600">
-                FEMP Nº 11 y 20
-              </span>
-            </div>
-            <p class="mt-3 font-mono text-3xl font-extrabold text-slate-900">
-              {resumen.kpis.avisosCiudadanosAnalizados.toLocaleString("es-ES")}
-            </p>
-            <p class="mt-1 text-xs font-semibold text-slate-800">
-              Quejas y comunicaciones vecinales clasificadas por barrio
-            </p>
-            <p class="mt-2.5 text-xs leading-relaxed text-slate-600">
-              <strong>¿Qué significa?</strong> Cruzamos las quejas por ruido, ocio
-              nocturno y limpieza con las licencias de terrazas e IAE para medir la
-              saturación real del espacio público.
-            </p>
-          </div>
-          <a
-            href="/metodologia#brecha_equidad_urbana"
-            class="mt-3 inline-block text-xs font-bold text-sky-800 hover:underline"
-          >
-            Cómo medimos Comercio y Convivencia →
-          </a>
-        </article>
-
-        <!-- KPI 4 -->
-        <article class="interactive-card-hover flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-900">
-                4. Presupuesto y Equidad
-              </span>
-              <span class="font-mono text-[11px] font-semibold text-slate-600">
-                FEMP Nº 12 y 40
-              </span>
-            </div>
-            <p class="mt-3 font-mono text-3xl font-extrabold text-slate-900">
-              {(resumen.kpis.gastoBienesServiciosEur / 1_000_000).toFixed(1)} M€
-            </p>
-            <p class="mt-1 text-xs font-semibold text-slate-800">
-              Gasto corriente auditado ·{" "}
-              {(resumen.kpis.subvencionesNominativasEur / 1_000_000).toFixed(1)} M€
-              subvenciones
-            </p>
-            <p class="mt-2.5 text-xs leading-relaxed text-slate-600">
-              <strong>¿Qué significa?</strong> Auditamos el presupuesto municipal y
-              reclamamos su desagregación por código de barrio para verificar si la
-              inversión compensa a los barrios más sobrecargados.
-            </p>
-          </div>
-          <a
-            href="/gobernanza"
-            class="mt-3 inline-block text-xs font-bold text-sky-800 hover:underline"
-          >
-            Auditoría FEMP-80 y Ley 1/2022 →
-          </a>
-        </article>
       </div>
     </section>
 
-    <!-- ESTACIÓN INTERACTIVA DE EXPLORACIÓN CARTOGRÁFICA Y RANKING DE LOS 88 BARRIOS -->
-    <ObservatoryApp
-      client:visible
-      initialTopBarrios={resumen.topBarriosPresion.slice(0, 8)}
-      initialAllBarrios={resumen.topBarriosPresion.slice(0, 12)}
-      benchmarks={benchmarks}
-      dataBaseUrl={dataBaseUrl}
-    />
-
-    <!-- ESCALA SEMAFÓRICA RÁPIDA Y ENLACES A LAS PÁGINAS DE PROFUNDIZACIÓN -->
-    <section
-      aria-labelledby="heading-escala-rapida"
-      class="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs"
-    >
-      <div class="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span class="text-xs font-bold tracking-wider text-sky-800 uppercase">
-            Guía Rápida de Interpretación Ciudadana
-          </span>
-          <h2 id="heading-escala-rapida" class="mt-1 text-lg font-extrabold text-slate-900 sm:text-xl">
-            ¿Cómo interpretar los 4 niveles de alerta del índice ISVP?
-          </h2>
+    <section aria-labelledby="h-mapa" class="flex flex-wrap gap-10 border-b border-ink py-10">
+      <div class="min-w-0 flex-[999_1_560px]">
+        <div class="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+          <h2 id="h-mapa" class="font-display text-[32px] font-extrabold">El mapa de la presión</h2>
+          <span class="font-mono text-[13px]">ISVP 0–100 · clic en un barrio para abrir su ficha</span>
         </div>
-        <a
-          href="/metodologia"
-          class="text-xs font-bold text-sky-800 underline hover:text-slate-950"
-        >
-          Abrir manual metodológico completo →
-        </a>
+        <PressureMap client:visible geojsonUrl={`${baseUrl}/barrios_vulnerabilidad.geojson`} />
+        <div class="mt-4">
+          <LevelLegend counts={benchmarks.countsByAlert} />
+        </div>
       </div>
 
-      <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {
-          ISVP_LEVELS.map((lvl) => (
-            <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-              <div class="flex items-center justify-between gap-2">
-                <span
-                  class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-bold ${lvl.badgeClass}`}
+      <div class="min-w-0 flex-[1_1_340px]">
+        <h2 class="font-display mb-4 text-[32px] font-extrabold">Los 10 más tensionados</h2>
+        <ol class="border-t-2 border-ink">
+          {
+            top10.map((b, i) => (
+              <li class="border-b border-ink">
+                <a
+                  href={`/barrios/${slugBarrio(b.nombre)}`}
+                  class="link-row grid grid-cols-[32px_1fr_auto] items-center gap-3 py-3 text-ink no-underline"
                 >
-                  <span class={`h-2 w-2 rounded-full ${lvl.dotClass}`} aria-hidden="true" />
-                  Alerta {lvl.level}
-                </span>
-                <span class="font-mono text-xs font-bold text-slate-700">
-                  {lvl.range}
-                </span>
-              </div>
-              <p class="mt-2.5 text-xs font-bold text-slate-900">
-                {lvl.summary}
-              </p>
-              <p class="mt-1.5 text-xs leading-relaxed text-slate-600">
-                {lvl.citizenMeaning}
-              </p>
-            </div>
-          ))
-        }
+                  <span class="font-mono text-[13px]">{String(i + 1).padStart(2, "0")}</span>
+                  <span class="flex flex-col">
+                    <span class="link-row-name text-[17px] font-bold">{nombreLegible(b.nombre)}</span>
+                    <span class="text-[13px] text-muted">{b.distrito}</span>
+                  </span>
+                  <span class="font-display text-[26px] font-extrabold">{fmtNum(b.isvp, 1)}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ol>
+        <a href="/barrios" class="mt-4 inline-block font-bold text-ink">Ver los {resumen.allBarrios.length} barrios →</a>
       </div>
+    </section>
 
-      <!-- Tarjetas de navegación hacia las páginas especializadas del portal -->
-      <div class="mt-6 grid gap-4 border-t border-slate-200 pt-6 md:grid-cols-3">
-        <a
-          href="/metodologia"
-          class="interactive-card-hover group rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-sky-300 hover:bg-sky-50/40"
-        >
-          <span class="font-mono text-[11px] font-bold text-sky-800 uppercase">
-            Página 2 · Guía Didáctica
-          </span>
-          <h3 class="mt-1 text-sm font-extrabold text-slate-900 group-hover:text-sky-900">
-            Guía de Métricas, Fórmulas y Diccionario Ciudadano →
-          </h3>
-          <p class="mt-1 text-xs text-slate-600">
-            Explicación paso a paso de cada indicador, cómo ponderamos códigos
-            postales a barrios y preguntas frecuentes.
-          </p>
-        </a>
+    <section aria-label="Cifras clave" class="grid gap-px border-b border-ink bg-ink sm:grid-cols-2 lg:grid-cols-4">
+      {
+        cifras.map((c) => (
+          <div class="bg-paper py-7 sm:px-6 sm:first:pl-0">
+            <p class="font-display text-5xl font-extrabold tracking-[-0.03em]">{fmtNum(c.valor)}</p>
+            <p class="mt-1 text-[15px]">{c.texto}</p>
+          </div>
+        ))
+      }
+    </section>
 
-        <a
-          href="/analisis"
-          class="interactive-card-hover group rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-sky-300 hover:bg-sky-50/40"
-        >
-          <span class="font-mono text-[11px] font-bold text-amber-800 uppercase">
-            Página 3 · Serie Longitudinal
-          </span>
-          <h3 class="mt-1 text-sm font-extrabold text-slate-900 group-hover:text-sky-900">
-            Evolución 2015–2026, Distritos y Códigos Postales →
-          </h3>
-          <p class="mt-1 text-xs text-slate-600">
-            Curva de aceleración de licencias VUT desde 2015, comparativa de los 19
-            distritos y ranking de los 26 códigos postales.
-          </p>
-        </a>
-
-        <a
-          href="/gobernanza"
-          class="interactive-card-hover group rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-sky-300 hover:bg-sky-50/40"
-        >
-          <span class="font-mono text-[11px] font-bold text-emerald-800 uppercase">
-            Página 4 · Transparencia Activa
-          </span>
-          <h3 class="mt-1 text-sm font-extrabold text-slate-900 group-hover:text-sky-900">
-            Auditoría FEMP-80, Solicitudes Ley 1/2022 y Descargas →
-          </h3>
-          <p class="mt-1 text-xs text-slate-600">
-            Semáforo de calidad de datos municipales, generador de solicitudes de
-            apertura y descarga de GeoJSON, Parquet y JSON.
-          </p>
-        </a>
+    <section aria-labelledby="h-serie" class="border-b border-ink py-12">
+      <div class="mb-6 flex flex-wrap items-baseline justify-between gap-3">
+        <h2 id="h-serie" class="font-display text-[32px] font-extrabold">Licencias vigentes por año de alta</h2>
+        <span class="font-mono text-[13px]">*{anioCaptura} hasta el {fechaCorte}</span>
       </div>
+      <AnnualBars
+        rows={serie}
+        resaltarDesde={2024}
+        anioParcial={anioCaptura}
+        label={`Altas anuales de licencias aún vigentes entre ${serie[0]?.anio} y ${anioCaptura}`}
+      />
+      <p class="mt-4 text-sm text-muted">
+        Solo cuenta licencias que siguen vigentes hoy. <a href="/evolucion" class="font-bold text-ink">Ver la evolución completa →</a>
+      </p>
+    </section>
+
+    <section aria-labelledby="h-indice" class="grid gap-8 py-12 sm:grid-cols-2 lg:grid-cols-5">
+      <div>
+        <h2 id="h-indice" class="font-display mb-3 text-[32px] font-extrabold">Qué mide el índice</h2>
+        <p class="mb-4 leading-relaxed">
+          El ISVP suma cuatro vectores con pesos fijos. Contar pisos no basta: 200 licencias pesan más
+          en un barrio pequeño y envejecido.
+        </p>
+        <a href="/metodologia" class="font-bold text-ink">Leer el método →</a>
+      </div>
+      {
+        vectores.map((v) => (
+          <div class="border-t-[6px] border-ink pt-4">
+            <p class="font-display text-[40px] font-extrabold">{v.peso}</p>
+            <p class="mt-1 mb-1.5 text-[17px] font-bold">{v.nombre}</p>
+            <p class="text-sm leading-normal">{v.texto}</p>
+          </div>
+        ))
+      }
     </section>
   </div>
 </PublicLayout>

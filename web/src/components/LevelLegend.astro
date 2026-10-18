@@ -1,0 +1,25 @@
+---
+import { NIVEL_COLOR, NIVEL_ORDEN, type NivelAlerta } from "../lib/barrios";
+
+interface Props {
+  counts?: Partial<Record<NivelAlerta, number>>;
+}
+
+const { counts } = Astro.props;
+---
+
+<ul class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+  {
+    NIVEL_ORDEN.map((nivel) => (
+      <li class="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          class="h-3.5 w-3.5 rounded-full border border-ink"
+          style={{ backgroundColor: NIVEL_COLOR[nivel] }}
+        />
+        {nivel}
+        {counts?.[nivel] !== undefined && <span class="font-mono">· {counts[nivel]}</span>}
+      </li>
+    ))
+  }
+</ul>

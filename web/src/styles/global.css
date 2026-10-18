@@ -1,15 +1,24 @@
 @import "tailwindcss";
 
-:root {
-  --font-sans:
-    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  --font-mono:
-    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+/* Dirección A · Boletín: papel, tinta y un único subrayado de alerta */
+@theme {
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-paper: #f3f1ec;
+  --color-paper-2: #fbfaf7;
+  --color-ink: #141414;
+  --color-muted: #5a5a55;
+  --color-rule: #141414;
+  --color-mark: #ffd400;
+
+  --color-nivel-critica: #7a1f12;
+  --color-nivel-alta: #e0662a;
+  --color-nivel-moderada: #f2b84b;
+  --color-nivel-baja: #e4ded0;
+
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
-  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 html {
@@ -19,92 +28,112 @@ html {
 
 body {
   font-family: var(--font-sans);
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
   line-height: 1.5;
   overflow-x: hidden;
 }
 
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+}
+
 .font-mono,
 .tabular-nums {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
-/* Skip link for keyboard and screen reader accessibility (WCAG 2.4.1) */
+/* Subrayado amarillo de los titulares */
+.mark {
+  background-color: var(--color-mark);
+  padding: 0 0.15em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Saltar al contenido (WCAG 2.4.1) */
 .skip-link {
   position: absolute;
   top: -100px;
   left: 1rem;
   z-index: 100;
   padding: 0.75rem 1.25rem;
-  background-color: #0f172a;
-  color: #ffffff;
+  background-color: var(--color-ink);
+  color: var(--color-paper);
   font-weight: 700;
   font-size: 0.875rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25);
   transition: top 160ms var(--ease-out-strong);
 }
 
 .skip-link:focus {
   top: 0.75rem;
-  outline: 3px solid #38bdf8;
-  outline-offset: 2px;
 }
 
-/* Subtle institutional cartographic grid background */
-.civic-grid-bg {
-  background-color: #0f172a;
-  background-image:
-    linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-.civic-grid-light {
-  background-image:
-    linear-gradient(to right, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
-}
-
-/* Interactive press and hover states following Emil Kowalski's design engineering rules */
-.interactive-btn {
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 2px solid var(--color-ink);
   cursor: pointer;
   transition:
     transform 150ms var(--ease-out-strong),
     background-color 150ms var(--ease-out-strong),
-    border-color 150ms var(--ease-out-strong),
-    color 150ms var(--ease-out-strong),
-    box-shadow 150ms var(--ease-out-strong);
+    color 150ms var(--ease-out-strong);
 }
 
-.interactive-btn:active {
+.btn:active {
   transform: scale(0.97);
 }
 
-.interactive-btn:focus-visible,
-a:focus-visible,
-select:focus-visible,
-input:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid #0284c7;
-  outline-offset: 2px;
+.btn-ink {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .interactive-card-hover {
-    transition:
-      transform 180ms var(--ease-out-strong),
-      box-shadow 180ms var(--ease-out-strong),
-      border-color 180ms var(--ease-out-strong);
+.btn-ink:hover {
+  background-color: #2b2b28;
+}
+
+.btn-line {
+  background-color: transparent;
+  color: var(--color-ink);
+}
+
+.btn-line:hover {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+}
+
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--color-mark);
+}
+
+.link-row:hover .link-row-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media print {
+  header,
+  footer,
+  .no-print {
+    display: none !important;
   }
-  .interactive-card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow:
-      0 10px 15px -3px rgba(15, 23, 42, 0.06),
-      0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  body {
+    background: #fff;
   }
 }
 
@@ -118,6 +147,5 @@ textarea:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }

@@ -1,0 +1,219 @@
+---
+import PublicLayout from "../layouts/PublicLayout.astro";
+import AnnualBars from "../components/AnnualBars.astro";
+import { loadObservatoryData } from "../lib/data";
+import { fmtNum, nombreLegible, slugBarrio } from "../lib/barrios";
+
+const { resumen, series } = await loadObservatoryData();
+const anioCaptura = new Date(resumen.latestSnapshot.capturedAt).getFullYear();
+const fechaCorte = new Date(resumen.latestSnapshot.lastModified ?? resumen.latestSnapshot.capturedAt)
+  .toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+
+const anual = series.serieAnualAltas;
+const altas = anual.map((r) => ({ anio: r.anio, valor: r.nuevas_licencias }));
+const stock = anual.map((r) => ({ anio: r.anio, valor: r.stock_acumulado_vigente }));
+const pico = [...anual].sort((a, b) => b.nuevas_licencias - a.nuevas_licencias)[0];
+const ultimoStock = anual.at(-1)?.stock_acumulado_vigente ?? 0;
+const desde2024 = anual.filter((r) => r.anio >= 2024).reduce((s, r) => s + r.nuevas_licencias, 0);
+
+const capturas = [...series.snapshotsDiff].reverse();
+const rapidos = [...resumen.allBarrios]
+  .sort((a, b) => b.vut_altas_recientes - a.vut_altas_recientes)
+  .slice(0, 10);
+const maxRapido = Math.max(1, ...rapidos.map((b) => b.vut_activas));
+const distritos = [...series.distritosResumen].sort((a, b) => b.isvp_promedio - a.isvp_promedio);
+const cps = [...series.codigosPostalesRanking].sort((a, b) => b.vut_activas - a.vut_activas).slice(0, 12);
+
+const pageTitle = "Evolución del registro de viviendas turísticas en València — Radar Vivienda";
+const pageDescription =
+  "Altas anuales de viviendas turísticas desde 2015, registro semanal de capturas con huella SHA-256, barrios donde más crecen las licencias, distritos y códigos postales.";
+---
+
+<PublicLayout
+  title={pageTitle}
+  description={pageDescription}
+  currentPath="/evolucion"
+  snapshotFile={resumen.latestSnapshot.fileName}
+  snapshotSha256={resumen.latestSnapshot.sha256}
+  updatedAt={resumen.updatedAt}
+>
+  <div class="mx-auto max-w-[1320px] px-4 sm:px-6">
+    <section class="grid items-end gap-8 border-b border-ink pt-12 pb-10 lg:grid-cols-2">
+      <div>
+        <p class="mb-3 font-mono text-[13px] tracking-[0.08em] uppercase">Evolución</p>
+        <h1 class="font-display text-[clamp(44px,6vw,80px)] leading-[0.95] font-extrabold tracking-[-0.035em]">
+          <span class="mark">{fmtNum(desde2024)}</span> licencias nuevas desde 2024
+        </h1>
+      </div>
+      <p class="max-w-xl text-[19px] leading-relaxed">
+        La GVA sobrescribe el CSV de viviendas turísticas cada semana. Nuestras capturas inmutables
+        son el único histórico público de altas y bajas. De las {fmtNum(ultimoStock)} licencias vigentes
+        con fecha de alta, el año con más inscripciones fue {pico?.anio} ({fmtNum(pico?.nuevas_licencias ?? 0)}).
+      </p>
+    </section>
+
+    <section aria-labelledby="h-altas" class="border-b border-ink py-12">
+      <div class="mb-6 flex flex-wrap items-baseline justify-between gap-3">
+        <h2 id="h-altas" class="font-display text-[32px] font-extrabold">Altas por año</h2>
+        <span class="font-mono text-[13px]">*{anioCaptura} hasta el {fechaCorte}</span>
+      </div>
+      <AnnualBars
+        rows={altas}
+        resaltarDesde={2024}
+        anioParcial={anioCaptura}
+        label={`Altas anuales de licencias vigentes; máximo en ${pico?.anio}`}
+      />
+    </section>
+
+    <section aria-labelledby="h-stock" class="border-b border-ink py-12">
+      <h2 id="h-stock" class="font-display mb-6 text-[32px] font-extrabold">Parque acumulado</h2>
+      <AnnualBars
+        rows={stock}
+        resaltarDesde={2024}
+        anioParcial={anioCaptura}
+        height={220}
+        label={`Licencias vigentes acumuladas por año de alta, hasta ${fmtNum(ultimoStock)}`}
+      />
+      <p class="mt-4 text-sm text-muted">
+        Solo cuenta licencias que siguen vigentes hoy: las dadas de baja antes de nuestra primera captura no
+        aparecen.
+      </p>
+    </section>
+
+    <section class="flex flex-wrap gap-12 border-b border-ink py-12">
+      <div class="min-w-0 flex-[3_1_520px]">
+        <h2 class="font-display mb-2 text-[32px] font-extrabold">Registro de capturas semanales</h2>
+        <p class="mb-5 text-muted">Cada fila es una instantánea fechada con su huella SHA-256, publicada en GitHub Releases.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[620px] border-collapse text-left font-mono text-sm">
+            <thead>
+              <tr class="border-b-2 border-ink text-xs uppercase">
+                <th scope="col" class="py-2 font-normal">Captura</th>
+                <th scope="col" class="py-2 text-right font-normal">VUT</th>
+                <th scope="col" class="py-2 text-right font-normal">Altas</th>
+                <th scope="col" class="py-2 text-right font-normal">Bajas</th>
+                <th scope="col" class="py-2 text-right font-normal">Neto</th>
+                <th scope="col" class="py-2 pl-4 font-normal">sha256</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                capturas.map((c, i) => (
+                  <tr class="border-b border-ink/30">
+                    <td class="py-3">{c.capturedAt.slice(0, 10)}</td>
+                    <td class="py-3 text-right">{fmtNum(c.vutActivasValencia)}</td>
+                    <td class="py-3 text-right">{fmtNum(c.altasRespectoAnterior)}</td>
+                    <td class="py-3 text-right">{fmtNum(c.bajasRespectoAnterior)}</td>
+                    <td class="py-3 text-right">
+                      {i === capturas.length - 1 ? "base" : `${c.variacionNeta > 0 ? "+" : ""}${fmtNum(c.variacionNeta)}`}
+                    </td>
+                    <td class="py-3 pl-4" title={c.sha256}>{c.sha256.slice(0, 8)}…{c.sha256.slice(-5)}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+        {
+          capturas.length < 2 && (
+            <p class="mt-4 border-2 border-dashed border-ink p-4 text-sm">
+              De momento hay {capturas.length} captura. La comparación de altas y bajas empieza con la siguiente.
+            </p>
+          )
+        }
+        <div class="mt-5 flex flex-wrap gap-3">
+          <a href="https://github.com/turbica/radar-vivienda/releases" class="btn btn-line">Todas las capturas</a>
+          <a href="/datos" class="btn btn-line">Descargar datos</a>
+        </div>
+      </div>
+
+      <div class="min-w-0 flex-[2_1_360px]">
+        <h2 class="font-display mb-2 text-[32px] font-extrabold">Dónde se abren más</h2>
+        <p class="mb-5 text-muted">Altas desde 2024 sobre el total vigente del barrio</p>
+        <ul class="space-y-4">
+          {
+            rapidos.map((b) => (
+              <li>
+                <a href={`/barrios/${slugBarrio(b.nombre)}`} class="link-row block text-ink no-underline">
+                  <span class="mb-1.5 flex justify-between gap-3">
+                    <span>
+                      <span class="link-row-name font-bold">{nombreLegible(b.nombre)}</span>{" "}
+                      <span class="text-sm text-muted">{b.distrito}</span>
+                    </span>
+                    <span class="font-mono text-sm">
+                      {b.vut_altas_recientes} <span class="text-muted">/ {b.vut_activas}</span>
+                    </span>
+                  </span>
+                  <span aria-hidden="true" class="relative block h-2.5 bg-nivel-baja">
+                    <span class="absolute inset-y-0 left-0 bg-[#9c978a]" style={{ width: `${(b.vut_activas / maxRapido) * 100}%` }} />
+                    <span class="absolute inset-y-0 left-0 bg-ink" style={{ width: `${(b.vut_altas_recientes / maxRapido) * 100}%` }} />
+                  </span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </section>
+
+    <section class="flex flex-wrap gap-12 py-12 pb-16">
+      <div class="min-w-0 flex-[1_1_480px]">
+        <h2 class="font-display mb-5 text-[32px] font-extrabold">Por distrito</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[520px] border-collapse text-left">
+            <thead>
+              <tr class="border-b-2 border-ink font-mono text-xs uppercase">
+                <th scope="col" class="py-2 font-normal">Distrito</th>
+                <th scope="col" class="py-2 text-right font-normal">Barrios</th>
+                <th scope="col" class="py-2 text-right font-normal">VUT</th>
+                <th scope="col" class="py-2 text-right font-normal">Plazas</th>
+                <th scope="col" class="py-2 text-right font-normal">ISVP medio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                distritos.map((d) => (
+                  <tr class="border-b border-ink/30">
+                    <td class="py-2.5 font-bold">{d.distrito}</td>
+                    <td class="py-2.5 text-right font-mono">{d.barriosCount}</td>
+                    <td class="py-2.5 text-right font-mono">{fmtNum(d.vut_activas)}</td>
+                    <td class="py-2.5 text-right font-mono">{fmtNum(d.plazas_vut)}</td>
+                    <td class="font-display py-2.5 text-right text-lg font-extrabold">{fmtNum(d.isvp_promedio, 1)}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="min-w-0 flex-[1_1_380px]">
+        <h2 class="font-display mb-5 text-[32px] font-extrabold">Por código postal</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[380px] border-collapse text-left">
+            <thead>
+              <tr class="border-b-2 border-ink font-mono text-xs uppercase">
+                <th scope="col" class="py-2 font-normal">CP</th>
+                <th scope="col" class="py-2 text-right font-normal">VUT</th>
+                <th scope="col" class="py-2 text-right font-normal">Altas 24–26</th>
+                <th scope="col" class="py-2 text-right font-normal">m² medios</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                cps.map((c) => (
+                  <tr class="border-b border-ink/30">
+                    <td class="py-2.5 font-mono font-semibold">{c.cp}</td>
+                    <td class="py-2.5 text-right font-mono">{fmtNum(c.vut_activas)}</td>
+                    <td class="py-2.5 text-right font-mono">{fmtNum(c.altas_recientes)}</td>
+                    <td class="py-2.5 text-right font-mono">{fmtNum(c.superficie_media, 1)}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</PublicLayout>

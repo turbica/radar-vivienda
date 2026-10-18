@@ -1,0 +1,273 @@
+---
+import PublicLayout from "../../layouts/PublicLayout.astro";
+import { PressureMap } from "../../components/PressureMap";
+import { loadObservatoryData } from "../../lib/data";
+import {
+  NIVEL_COLOR,
+  NIVEL_UMBRAL,
+  barriosVecinos,
+  fmtNum,
+  fmtPct,
+  nombreLegible,
+  rankingIsvp,
+  slugBarrio,
+  toBusqueda,
+} from "../../lib/barrios";
+import type { BarrioIndicators } from "../../types/observatory";
+
+export async function getStaticPaths() {
+  const { resumen } = await loadObservatoryData();
+  return resumen.allBarrios.map((b) => ({
+    params: { slug: slugBarrio(b.nombre) },
+    props: { coddistbar: b.coddistbar },
+  }));
+}
+
+const { coddistbar } = Astro.props as { coddistbar: string };
+const { resumen, series, benchmarks, dataBaseUrl } = await loadObservatoryData();
+const baseUrl = dataBaseUrl.replace(/\/+$/, "");
+const barrio = resumen.allBarrios.find((b) => b.coddistbar === coddistbar) as BarrioIndicators;
+const nombre = nombreLegible(barrio.nombre);
+const slug = slugBarrio(barrio.nombre);
+const ranking = rankingIsvp(resumen.allBarrios);
+const puesto = ranking.findIndex((b) => b.coddistbar === coddistbar) + 1;
+const total = resumen.allBarrios.length;
+const vecinos = barriosVecinos(barrio, resumen.allBarrios, 5).sort((a, b) => b.isvp - a.isvp);
+const opciones = toBusqueda(resumen.allBarrios);
+
+const vectores = [
+  { nombre: "Presión turística", peso: "35 %", valor: barrio.presion_turistica },
+  { nombre: "Desplazamiento comercial", peso: "25 %", valor: barrio.desplazamiento_comercial },
+  { nombre: "Brecha de equidad urbana", peso: "20 %", valor: barrio.brecha_equidad_urbana },
+  { nombre: "Vulnerabilidad residencial", peso: "20 %", valor: barrio.vulnerabilidad_residencial },
+];
+const principal = [...vectores].sort((a, b) => b.valor - a.valor)[0]!;
+
+const ratioDensidad = benchmarks.avgDensidadVutKm2 > 0 ? barrio.densidad_vut_km2 / benchmarks.avgDensidadVutKm2 : 0;
+const frasePresion =
+  ratioDensidad >= 1.5
+    ? `${fmtNum(ratioDensidad, 1)} veces la densidad media de pisos turísticos de los barrios de València`
+    : ratioDensidad >= 0.8
+      ? "una densidad de pisos turísticos parecida a la media de los barrios de València"
+      : "menos densidad de pisos turísticos que la media de los barrios de València";
+const resumenTexto = `Nivel ${barrio.nivel_alerta.toLowerCase()}, puesto ${puesto} de ${total}. Tiene ${frasePresion}, y su factor de mayor peso es la ${principal.nombre.toLowerCase()}.`;
+
+const cifras = [
+  { etiqueta: "Vivienda turística", valor: fmtNum(barrio.vut_activas), detalle: `licencias activas · ${fmtNum(barrio.plazas_vut)} plazas` },
+  { etiqueta: "Densidad", valor: `${fmtNum(barrio.densidad_vut_km2)} / km²`, detalle: `media de los barrios: ${fmtNum(benchmarks.avgDensidadVutKm2, 1)} / km²` },
+  { etiqueta: "Altas recientes", valor: fmtNum(barrio.vut_altas_recientes), detalle: "licencias nuevas desde 2024" },
+  { etiqueta: "Actividad económica", valor: fmtPct(barrio.variacion_iae_pct), detalle: `variación de recibos IAE (${fmtNum(barrio.recibos_iae)})` },
+  { etiqueta: "Terrazas", valor: fmtNum(barrio.recibos_terrazas), detalle: `recibos · ${fmtNum(barrio.importe_terrazas_eur)} € en tasas` },
+  { etiqueta: "Avisos vecinales", valor: fmtNum(barrio.avisos_totales), detalle: `${fmtNum(barrio.avisos_ruido_convivencia)} por ruido · ${fmtNum(barrio.avisos_deterioro_viario)} por deterioro` },
+];
+
+const diffs = series.snapshotsDiff;
+const ultimaDiff = diffs.length > 1 ? diffs[diffs.length - 1] : null;
+const fechaCaptura = new Date(resumen.latestSnapshot.capturedAt).toLocaleDateString("es-ES", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+const cita = `Radar Vivienda València. Ficha de ${nombre} (${barrio.distrito}), ISVP ${fmtNum(barrio.isvp, 1)}. Instantánea ${resumen.latestSnapshot.fileName}. https://radar-vivienda.valencia.es/barrios/${slug}`;
+
+const tramos = [
+  { desde: NIVEL_UMBRAL.Baja, hasta: NIVEL_UMBRAL.Moderada, color: NIVEL_COLOR.Baja },
+  { desde: NIVEL_UMBRAL.Moderada, hasta: NIVEL_UMBRAL.Alta, color: NIVEL_COLOR.Moderada },
+  { desde: NIVEL_UMBRAL.Alta, hasta: NIVEL_UMBRAL.Crítica, color: NIVEL_COLOR.Alta },
+  { desde: NIVEL_UMBRAL.Crítica, hasta: 100, color: "#b8452e" },
+];
+
+const pageTitle = `${nombre}: presión residencial e índice ISVP — Radar Vivienda València`;
+const pageDescription = `${nombre} (${barrio.distrito}): ISVP ${fmtNum(barrio.isvp, 1)}/100, nivel ${barrio.nivel_alerta.toLowerCase()}. ${fmtNum(barrio.vut_activas)} viviendas turísticas, ${fmtNum(barrio.densidad_vut_km2)} por km² y ${fmtNum(barrio.avisos_totales)} avisos vecinales.`;
+---
+
+<PublicLayout
+  title={pageTitle}
+  description={pageDescription}
+  currentPath="/barrios"
+  canonicalPath={`/barrios/${slug}`}
+  breadcrumbLeaf={nombre}
+  snapshotFile={resumen.latestSnapshot.fileName}
+  snapshotSha256={resumen.latestSnapshot.sha256}
+  updatedAt={resumen.updatedAt}
+>
+  <div class="mx-auto max-w-[1320px] px-4 sm:px-6">
+    <div class="no-print flex flex-wrap items-center justify-between gap-4 border-b border-ink py-5">
+      <nav aria-label="Miga de pan" class="text-sm">
+        <a href="/barrios" class="text-ink">Barrios</a> / {barrio.distrito} / <strong>{nombre}</strong>
+      </nav>
+      <form action="/barrios" class="flex items-center gap-2.5" data-cambiar-barrio>
+        <label for="sel-barrio" class="text-sm font-bold">Cambiar de barrio</label>
+        <select id="sel-barrio" class="min-h-[44px] border-2 border-ink bg-paper-2 px-3 text-[15px]">
+          {
+            opciones.map((o) => (
+              <option value={o.slug} selected={o.slug === slug}>
+                {o.nombre}
+              </option>
+            ))
+          }
+        </select>
+      </form>
+    </div>
+
+    <section class="flex flex-wrap items-end gap-12 border-b border-ink pt-12 pb-10">
+      <div class="min-w-0 flex-[999_1_520px]">
+        <p class="mb-3 font-mono text-[13px] tracking-[0.08em] uppercase">
+          Ficha de barrio · {barrio.distrito}
+        </p>
+        <h1 class="font-display text-[clamp(52px,9vw,140px)] leading-[0.9] font-extrabold tracking-[-0.045em] break-words">
+          {nombre}
+        </h1>
+        <p class="mt-5 max-w-[640px] text-xl leading-relaxed">{resumenTexto}</p>
+      </div>
+      <div class="min-w-0 flex-[1_1_320px] bg-ink p-7 text-paper">
+        <p class="font-mono text-[13px] tracking-[0.08em] uppercase">Índice ISVP</p>
+        <p class="font-display mt-2 text-[104px] leading-none font-extrabold tracking-[-0.04em]">
+          {fmtNum(barrio.isvp, 1)}
+        </p>
+        <p class="mt-2 mb-5">
+          <span class="mark font-bold text-ink">Nivel {barrio.nivel_alerta.toLowerCase()}</span> · puesto {puesto} de {total}
+        </p>
+        <div aria-hidden="true" class="relative flex h-3">
+          {tramos.map((t) => <span style={{ flex: `${t.hasta - t.desde} 1 0`, backgroundColor: t.color }} />)}
+          <span class="absolute -top-1.5 h-6 w-1 bg-paper" style={{ left: `calc(${barrio.isvp}% - 2px)` }} />
+        </div>
+        <div aria-hidden="true" class="mt-2 flex justify-between font-mono text-[11px]">
+          <span>0</span><span>32</span><span>46</span><span>62</span><span>100</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-vectores" class="border-b border-ink py-12">
+      <h2 id="h-vectores" class="font-display mb-6 text-[32px] font-extrabold">
+        De dónde sale el {fmtNum(barrio.isvp, 1)}
+      </h2>
+      <ul class="space-y-5">
+        {
+          vectores.map((v) => (
+            <li class="grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-2 sm:grid-cols-[minmax(150px,280px)_1fr_64px]">
+              <span class="flex flex-col">
+                <span class="text-[17px] font-bold">{v.nombre}</span>
+                <span class="text-[13px] text-muted">Peso {v.peso}</span>
+              </span>
+              <span aria-hidden="true" class="relative order-last col-span-2 h-7 bg-nivel-baja sm:order-none sm:col-span-1">
+                <span class="absolute inset-y-0 left-0 bg-ink" style={{ width: `${v.valor}%` }} />
+              </span>
+              <span class="font-display text-right text-[28px] font-extrabold">
+                {fmtNum(v.valor, 1)}
+                <span class="sr-only"> sobre 100</span>
+              </span>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="mt-6 text-sm text-muted">
+        Vulnerabilidad municipal de referencia: {barrio.etiqueta_vulnerabilidad_municipal.toLowerCase()}.{" "}
+        <a href="/metodologia" class="font-bold text-ink">Cómo se calcula cada vector →</a>
+      </p>
+    </section>
+
+    <section aria-labelledby="h-cifras" class="border-b border-ink py-12">
+      <h2 id="h-cifras" class="font-display mb-6 text-[32px] font-extrabold">Las cifras del barrio</h2>
+      <div class="grid gap-px border-y-2 border-ink bg-ink sm:grid-cols-2 lg:grid-cols-3">
+        {
+          cifras.map((c) => (
+            <div class="bg-paper p-6">
+              <p class="font-mono text-xs uppercase">{c.etiqueta}</p>
+              <p class="font-display mt-2 mb-1 text-[44px] leading-tight font-extrabold">{c.valor}</p>
+              <p class="text-sm">{c.detalle}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="flex flex-wrap gap-12 border-b border-ink py-12">
+      <div class="min-w-0 flex-[1_1_420px]">
+        <h2 class="font-display mb-4 text-[32px] font-extrabold">Barrios vecinos</h2>
+        <ul class="border-t-2 border-ink">
+          {
+            vecinos.map((b) => (
+              <li class="border-b border-ink">
+                <a
+                  href={`/barrios/${slugBarrio(b.nombre)}`}
+                  class="link-row grid grid-cols-[1fr_120px_56px] items-center gap-4 py-3 text-ink no-underline"
+                >
+                  <span class="link-row-name font-bold">{nombreLegible(b.nombre)}</span>
+                  <span aria-hidden="true" class="relative h-2.5 bg-nivel-baja">
+                    <span
+                      class="absolute inset-y-0 left-0"
+                      style={{ width: `${b.isvp}%`, backgroundColor: b.nivel_alerta === "Baja" ? "#9c978a" : NIVEL_COLOR[b.nivel_alerta] }}
+                    />
+                  </span>
+                  <span class="font-display text-right text-xl font-extrabold">{fmtNum(b.isvp, 1)}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <h2 class="font-display mt-10 mb-4 text-[32px] font-extrabold">Cambios de esta semana</h2>
+        {
+          ultimaDiff ? (
+            <div class="border-2 border-ink p-6 leading-relaxed">
+              <p class="mb-2 font-bold">En toda la ciudad, respecto a la captura anterior:</p>
+              <p>
+                {fmtNum(ultimaDiff.altasRespectoAnterior)} altas y {fmtNum(ultimaDiff.bajasRespectoAnterior)} bajas
+                (neto {ultimaDiff.variacionNeta > 0 ? "+" : ""}{fmtNum(ultimaDiff.variacionNeta)}). El desglose por barrio
+                aparecerá aquí cuando el colector lo calcule.
+              </p>
+            </div>
+          ) : (
+            <div class="border-2 border-dashed border-ink p-6 leading-relaxed">
+              <p class="mb-2 font-bold">Primera instantánea guardada el {fechaCaptura}.</p>
+              <p>
+                Las altas y bajas semanales aparecerán desde la próxima captura. Cada semana el histórico gana
+                una fila.
+              </p>
+            </div>
+          )
+        }
+      </div>
+      <div class="min-w-0 flex-[1_1_420px]">
+        <h2 class="font-display mb-4 text-[32px] font-extrabold">En el mapa</h2>
+        <PressureMap
+          client:visible
+          geojsonUrl={`${baseUrl}/barrios_vulnerabilidad.geojson`}
+          highlight={barrio.coddistbar}
+          aspect="1 / 1"
+        />
+      </div>
+    </section>
+
+    <section class="no-print py-12 pb-16">
+      <h2 class="font-display mb-4 text-[32px] font-extrabold">Usa esta ficha</h2>
+      <div class="flex flex-wrap gap-3">
+        <button type="button" class="btn btn-ink" data-imprimir>Imprimir o guardar en PDF</button>
+        <a href={`/barrios/${slug}.json`} download={`${slug}.json`} class="btn btn-line">Datos del barrio (JSON)</a>
+        <button type="button" class="btn btn-line" data-copiar={cita}>Copiar cita</button>
+        <a href="/datos" class="btn btn-line">Pedir datos que faltan</a>
+      </div>
+      <p class="mt-3 min-h-[1.5em] text-sm" aria-live="polite" data-copiar-estado></p>
+    </section>
+  </div>
+</PublicLayout>
+
+<script>
+  document.querySelector<HTMLFormElement>("[data-cambiar-barrio] select")?.addEventListener("change", (e) => {
+    const slug = (e.target as HTMLSelectElement).value;
+    if (slug) window.location.href = `/barrios/${slug}`;
+  });
+
+  document.querySelector("[data-imprimir]")?.addEventListener("click", () => window.print());
+
+  document.querySelector<HTMLButtonElement>("[data-copiar]")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    const estado = document.querySelector("[data-copiar-estado]");
+    try {
+      await navigator.clipboard.writeText(btn.dataset.copiar ?? "");
+      if (estado) estado.textContent = "Cita copiada al portapapeles.";
+    } catch {
+      if (estado) estado.textContent = btn.dataset.copiar ?? "";
+    }
+  });
+</script>

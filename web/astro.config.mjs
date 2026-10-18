@@ -7,6 +7,11 @@ export default defineConfig({
   output: "static",
   compressHTML: true,
   integrations: [react()],
+  // Rutas de la versión anterior del portal
+  redirects: {
+    "/analisis": "/evolucion",
+    "/gobernanza": "/datos",
+  },
   vite: {
     plugins: [tailwindcss()],
     build: {
@@ -16,9 +21,6 @@ export default defineConfig({
           manualChunks(id) {
             if (id.includes("maplibre-gl")) {
               return "maplibre-vendor";
-            }
-            if (id.includes("recharts") || id.includes("d3-")) {
-              return "charts-vendor";
             }
           },
         },
