@@ -1,8 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getDataDirs, REPO_ROOT } from "./config.ts";
+import { syncProcessedToWebPublic } from "./storage.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -59,6 +60,8 @@ async function syncFromGitHubReleases() {
 
   console.log("[data:sync] Extrayendo histórico en ./data/ ...");
   await execFileAsync("tar", ["-xzf", archivePath, "-C", REPO_ROOT]);
+  await unlink(archivePath).catch(() => {});
+  await syncProcessedToWebPublic();
   console.log("[data:sync] Sincronización completada.");
 }
 

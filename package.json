@@ -14,14 +14,14 @@
   },
   "packageManager": "pnpm@10.6.5",
   "scripts": {
-    "collect": "pnpm --filter @radar-vivienda/collector collect",
-    "process": "pnpm --filter @radar-vivienda/collector process",
-    "data:sync": "pnpm --filter @radar-vivienda/collector data:sync",
-    "dev": "pnpm --filter @radar-vivienda/web dev",
-    "build": "pnpm -r build",
-    "preview": "pnpm --filter @radar-vivienda/web preview",
-    "test": "pnpm --filter @radar-vivienda/collector test",
-    "typecheck": "pnpm -r typecheck"
+    "collect": "node --experimental-strip-types ./src/index.ts collect",
+    "process": "node --experimental-strip-types ./src/index.ts process",
+    "data:sync": "node --experimental-strip-types ./src/sync-releases.ts",
+    "dev": "node ./web/node_modules/astro/astro.js dev --root ./web",
+    "build": "node ./web/node_modules/astro/astro.js build --root ./web",
+    "preview": "node ./web/node_modules/astro/astro.js preview --root ./web",
+    "test": "node --experimental-strip-types --test ./src/test/*.test.ts",
+    "typecheck": "tsc -p src/tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
