@@ -1,0 +1,36 @@
+name: CI — Verificación de Tipos, Tests y Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v7
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.6.5
+
+      - name: Configurar Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Verificar tipos (Colector y Panel Web)
+        run: pnpm typecheck
+
+      - name: Ejecutar tests unitarios (Colector y DuckDB)
+        run: pnpm test
+
+      - name: Compilar proyecto completo
+        run: pnpm build

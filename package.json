@@ -18,8 +18,9 @@
     "process": "pnpm --filter @radar-vivienda/collector process",
     "data:sync": "pnpm --filter @radar-vivienda/collector data:sync",
     "dev": "pnpm --filter @radar-vivienda/web dev",
-    "build": "pnpm --filter @radar-vivienda/collector build && pnpm --filter @radar-vivienda/web build",
+    "build": "pnpm -r build",
     "preview": "pnpm --filter @radar-vivienda/web preview",
+    "test": "pnpm --filter @radar-vivienda/collector test",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.pnpm-store
+dist
+**/dist
+.astro
+**/.astro
+.git
+.env
+.env.local
+data/raw/*
+!data/raw/.gitkeep
+web/public/data
+AGENTS.md
+CLAUDE.md
+GEMINI.md
